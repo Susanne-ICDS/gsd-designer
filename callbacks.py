@@ -10,9 +10,9 @@ import xlsxwriter
 
 from app import app
 
-from test_submodule.statistical_test_objects import TestObject
-from test_submodule.error_spending import check_form_error_spent
-from test_submodule.math_parts.error_spending_simulation import simulation_loop
+from statistical_parts.statistical_test_objects import TestObject
+from statistical_parts.error_spending import check_form_error_spent
+from statistical_parts.math_parts.error_spending_simulation import simulation_loop
 
 from layout_instructions import table_style, disabled_style_header, disabled_style_data
 

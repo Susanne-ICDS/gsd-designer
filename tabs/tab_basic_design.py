@@ -1,7 +1,7 @@
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 
-from test_submodule.statistical_test_objects import test_options, TestObject
+from statistical_parts.statistical_test_objects import test_options, TestObject
 
 from layout_instructions import spacing_variables as spacing
 from layout_instructions import label, my_jumbo_box
