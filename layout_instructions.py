@@ -18,6 +18,8 @@ def my_jumbo_box(header, sub_header):
         style={'background-color': vub_blue})
 
 
+regular_text = html.Label
+
 table_style = {
     'css': [{'selector': '.dash-spreadsheet-container',
              'rule': 'border-radius: 6px; overflow: hidden;'}],

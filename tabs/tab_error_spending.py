@@ -23,7 +23,8 @@ layout = html.Div([
                               dbc.RadioItems(id='error_type',
                                              options=[{'label': 'Use spending functions', 'value': 'IR'},
                                                       {'label': 'Enter allowed errors directly', 'value': 'DES'}],
-                                             value='IR')])),
-
+                                             value='IR'),
+                              html.Br()
+                              ])),
     error_spending.layout
 ])

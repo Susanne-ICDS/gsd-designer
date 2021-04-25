@@ -1,9 +1,21 @@
 import dash_core_components as dcc
+import dash_bootstrap_components as dbc
 import dash_html_components as html
+
+import git
 
 from app import app, server
 import callbacks
+
 from tabs import navbar, tab_basic_design, tab_interim_analyses, tab_error_spending, tab_simulation
+
+from layout_instructions import spacing_variables as spacing
+
+# Get the most recent commit date
+repo = git.Repo("./repo")
+tree = repo.tree()
+for blob in tree:
+    commit = repo.iter_commits(paths=blob.path, max_count=1).next()
 
 app.layout = html.Div([
     navbar.bar,
@@ -13,6 +25,25 @@ app.layout = html.Div([
     html.Div(id='interim-analyses', hidden=True, children=tab_interim_analyses.layout),
     html.Div(id='error-spending', hidden=True, children=tab_error_spending.layout),
     html.Div(id='simulation', hidden=True, children=tab_simulation.layout),
+
+    html.Br(),
+    html.Br(),
+
+    dbc.Row([dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
+                     children=dbc.ButtonGroup([dbc.Button('<< Back', id='previous', color='primary'),
+                                               dbc.Button('Next step >>', id='next', color='primary')])),
+             dbc.Col(width=spacing['offset'])],
+            justify='end'),
+
+    html.Br(),
+    dbc.Row([dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
+                     children=['BISI logo and info', html.Br(), 'ICDS logo and info', html.Br(),
+                               ])],
+            dbc.Col(width={'size': 'auto', 'order': 12},
+                    children=['App developed by: Susanne Blotwijk', html.Br(),
+                              '{}'.format(blob.path, commit.committed_date)]),
+            style={'color': 'white', 'background-color': 'dark'}),
+
 
     dcc.Store(id='identify_model', storage_type='session'),
     # Summary of the user input

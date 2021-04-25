@@ -7,7 +7,6 @@ from statistical_parts.statistical_test_objects import test_options, TestObject
 from layout_instructions import spacing_variables as spacing
 from layout_instructions import label, my_jumbo_box, table_style
 
-
 layout = html.Div([
     my_jumbo_box('Interim analyses', 'Changes over time'),
 
