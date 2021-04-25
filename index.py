@@ -12,10 +12,9 @@ from tabs import navbar, tab_basic_design, tab_interim_analyses, tab_error_spend
 from layout_instructions import spacing_variables as spacing
 
 # Get the most recent commit date
-repo = git.Repo("./repo")
-tree = repo.tree()
-for blob in tree:
-    commit = repo.iter_commits(paths=blob.path, max_count=1).next()
+repo = git.Repo("./.git")
+headcommit = repo.head.commit
+headcommit.committed_date
 
 app.layout = html.Div([
     navbar.bar,
@@ -41,7 +40,7 @@ app.layout = html.Div([
                                ])],
             dbc.Col(width={'size': 'auto', 'order': 12},
                     children=['App developed by: Susanne Blotwijk', html.Br(),
-                              '{}'.format(blob.path, commit.committed_date)]),
+                              '{}'.format(1)]),
             style={'color': 'white', 'background-color': 'dark'}),
 
 
