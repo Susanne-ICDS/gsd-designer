@@ -32,35 +32,28 @@ _max_n_repeats = 10 ** 6
     Output('tab4', 'active'),
     Output('previous', 'disabled'),
     Output('next', 'disabled'),
+    Output('previous', 'href'),
+    Output('next', 'href'),
     Input('url', 'pathname'))
 def navigation(path):
+    if path is None:
+        return False, True, True, True, True, False, False, False, True, False, None, '/interim-analyses'
+
     first = path == '/basic-design'
     last = path == '/simulation'
+    tabs = np.array(['/basic-design', '/interim-analyses', '/error-spending', '/simulation'])
+    current_tab = int(np.arange(0, 4)[tabs == path])
+    previous_tab = None
+    next_tab = None
+
+    if current_tab > 0:
+        previous_tab = tabs[current_tab - 1]
+    if current_tab < 3:
+        next_tab = tabs[current_tab + 1]
 
     return path != '/basic-design', path != '/interim-analyses', path != '/error-spending', path != '/simulation', \
         path == '/basic-design', path == '/interim-analyses', path == '/error-spending', path == '/simulation', \
-        first, last
-
-
-@app.callback(
-    Output('url', 'pathname'),
-    Input('previous', 'n_clicks'),
-    Input('next', 'n_clicks'),
-    State('url', 'pathname'))
-def next_or_back(previous_btn, next_btn, path):
-    ctx = dash.callback_context
-
-    if not ctx.triggered:
-        raise PreventUpdate
-
-    tabs = np.array(['/basic-design', '/interim-analyses', '/error-spending', '/simulation'])
-    current_tab = int(np.arange(0, 4)[tabs == path])
-
-    if np.any([item["prop_id"] == 'next.n_clicks' for item in ctx.triggered]):
-        return tabs[current_tab + 1]
-
-    if np.any([item["prop_id"] == 'previous.n_clicks' for item in ctx.triggered]):
-        return tabs[current_tab - 1]
+        first, last, previous_tab, next_tab
 
 
 @app.callback(

@@ -18,8 +18,8 @@ from layout_instructions import spacing_variables as spacing
 # head_commit = repo.head.commit
 # time.asctime(time.gmtime(head_commit.committed_date))
 
-app.layout = html.Div([
-    navbar.bar,
+app.layout = html.Div([navbar.bar, dbc.Container([
+
     dcc.Location(id='url', pathname='/basic-design', refresh=False),
 
     html.Div(id='basic-design', hidden=False, children=tab_basic_design.layout),
@@ -42,20 +42,20 @@ app.layout = html.Div([
 
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),
 
-    dbc.Row([dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
+    dbc.Row([dbc.Col(width={'size': 3, 'offset': spacing['offset']},
                      children=['BISI logo and info',
                                html.Br(), 'ICDS logo and info',
                                html.Br(), 'Laarbeeklaan etc. etc.',
                                html.Br(), 'mail?'
                                ]),
-             dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
+             dbc.Col(width={'size': 3},
                      children=['Code and documentation on ',
                                html.A('Github', href='https://github.com/Susanne-ICDS/gsd-designer',
                                       style={'color': '#fff'}),
                                html.Br(), 'Publication: Coming soon',
                                html.Br(), 'Document with example: Coming soon'
                                ]),
-             dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
+             dbc.Col(width={'size': 3},
                      children=['App developed by: Susanne Blotwijk',
                                html.Br(), 'Most recent update: 25 Apr. 2021'
                                # '{}'.format(time.strftime("%d %b %Y, %H:%M", time.gmtime(head_commit.committed_date)))
@@ -72,7 +72,7 @@ app.layout = html.Div([
     # The simulations of the critical values, power etc.
     # This is a list of two json serialized pandas dataframes 1) the estimates and 2) their standard errors.
 
-])
+], fluid=True)])
 
 if __name__ == '__main__':
     app.run_server(debug=True)
