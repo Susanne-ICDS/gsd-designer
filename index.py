@@ -14,9 +14,9 @@ from layout_instructions import spacing_variables as spacing
 
 
 # Get the most recent commit date
-repo = git.Repo("./.git")
-head_commit = repo.head.commit
-time.asctime(time.gmtime(head_commit.committed_date))
+# repo = git.Repo("./.git")
+# head_commit = repo.head.commit
+# time.asctime(time.gmtime(head_commit.committed_date))
 
 app.layout = html.Div([
     navbar.bar,
@@ -57,8 +57,9 @@ app.layout = html.Div([
                                ]),
              dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
                      children=['App developed by: Susanne Blotwijk',
-                               html.Br(), 'Most recent update: '
-                               '{}'.format(time.strftime("%d %b %Y, %H:%M", time.gmtime(head_commit.committed_date)))])],
+                               html.Br(), 'Most recent update: 25 Apr. 2021'
+                               # '{}'.format(time.strftime("%d %b %Y, %H:%M", time.gmtime(head_commit.committed_date)))
+                               ])],
             style={'color': '#fff', 'background-color': '#1E1E1E', 'font-family': 'roboto'},
             justify="center"),
 
