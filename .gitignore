@@ -8,3 +8,5 @@ venv
 *.pyc
 .DS_Store
 .env
+
+!sites/.git
