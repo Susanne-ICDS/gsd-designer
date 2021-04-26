@@ -30,13 +30,37 @@ _max_n_repeats = 10 ** 6
     Output('tab2', 'active'),
     Output('tab3', 'active'),
     Output('tab4', 'active'),
+    Output('previous', 'disabled'),
+    Output('next', 'disabled'),
     Input('url', 'pathname'))
 def navigation(path):
-    if path is None:
-        return False, True, True, True, True, False, False, False
-    else:
-        return path != '/basic-design', path != '/interim-analyses', path != '/error-spending', path != '/simulation', \
-               path == '/basic-design', path == '/interim-analyses', path == '/error-spending', path == '/simulation'
+    first = path == '/basic-design'
+    last = path == '/simulation'
+
+    return path != '/basic-design', path != '/interim-analyses', path != '/error-spending', path != '/simulation', \
+        path == '/basic-design', path == '/interim-analyses', path == '/error-spending', path == '/simulation', \
+        first, last
+
+
+@app.callback(
+    Output('url', 'pathname'),
+    Input('previous', 'n_clicks'),
+    Input('next', 'n_clicks'),
+    State('url', 'pathname'))
+def next_or_back(previous_btn, next_btn, path):
+    ctx = dash.callback_context
+
+    if not ctx.triggered:
+        raise PreventUpdate
+
+    tabs = np.array(['/basic-design', '/interim-analyses', '/error-spending', '/simulation'])
+    current_tab = int(np.arange(0, 4)[tabs == path])
+
+    if np.any([item["prop_id"] == 'next.n_clicks' for item in ctx.triggered]):
+        return tabs[current_tab + 1]
+
+    if np.any([item["prop_id"] == 'previous.n_clicks' for item in ctx.triggered]):
+        return tabs[current_tab - 1]
 
 
 @app.callback(
