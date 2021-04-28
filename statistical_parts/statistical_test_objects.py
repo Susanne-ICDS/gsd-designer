@@ -10,7 +10,7 @@ from statistical_parts.math_parts import t_test_functions
 from statistical_parts.math_parts import one_way_functions
 
 from layout_instructions import spacing_variables as spacing
-from layout_instructions import label, table_style
+from layout_instructions import label, table_style, regular_text
 
 # Global variables for this page only
 # Preceding underscore '_' makes sure it cannot be imported to other pages
@@ -54,7 +54,6 @@ class BasicTest:
         cls.TwoGroups = html.Div(dbc.Input(id='n_groups', type='number', value=2), hidden=True)
 
         cls.Analyses = html.Div([
-            html.Br(),
             dbc.Row(dbc.Col(label('Number of analyses'),
                             width={'offset': spacing['offset'], 'size': spacing['size']})),
             dbc.Row(dbc.Col(dbc.Input(id='n_analyses', placeholder='Analyses', type='number',
@@ -130,8 +129,15 @@ class BasicTest:
         return False, sample_sizes.astype(int)
 
     @staticmethod
-    def update_test_parameter_input(*args, **kwargs):
+    def update_test_parameter_input(**kwargs):
         """ By default there are no input fields that need to be changed based on other input.
+        If there is, then the child class can overwrite this definition. """
+
+        raise PreventUpdate
+
+    @staticmethod
+    def update_input_table(**kwargs):
+        """ By default there are no input tables that need to be changed based on other input.
         If there is, then the child class can overwrite this definition. """
 
         raise PreventUpdate
@@ -171,6 +177,10 @@ class BasicTest:
                                                    test_param_data_ids)
         return False, test_parameters
 
+    @staticmethod
+    def fixed_sample_size(**kwargs):
+        return 'Secondary', 'The fixed sample size calculation has not yet been implemented for this test.'
+
 
 class TTest(BasicTest):
     """ Test object for the independent samples t-test. """
@@ -187,11 +197,22 @@ class TTest(BasicTest):
             self.TwoGroups,
 
             html.Br(),
-            dbc.Row(dbc.Col(label('Minimal important effect size'),
+            dbc.Row(dbc.Col([label('Pessimistic means and standard deviation')],
                             width={'offset': spacing['offset'], 'size': spacing['size']})),
-            dbc.Row(dbc.Col(dbc.Input(id={'type': 'test parameter', 'name': 'cohens_d', 'form': 'value'},
-                                      placeholder='Cohen´s D', type='number', value=1, min=10**-6, step=10**-6),
-                            width={'offset': spacing['offset'], 'size': spacing['float_input']}))
+            dbc.Row([
+                dbc.Col([
+                    html.Br(),
+                    dash_table.DataTable(id={'type': 'test parameter', 'name': 'means', 'form': 'datatable'},
+                                         columns=[{'id': 'mean-1', 'name': 'Mean group 1', 'type': 'numeric'},
+                                                  {'id': 'mean-2', 'name': 'Mean group 2', 'type': 'numeric'}],
+                                         data=[{'mean-1': 0, 'mean-2': 2}],
+                                         editable=True, **table_style)],
+                    width={'offset': spacing['offset'], 'size': 'auto'}),
+                dbc.Col([
+                    html.Br(),
+                    dbc.Input(id={'type': 'test parameter', 'name': 'sd', 'form': 'value'},
+                              placeholder='Standard deviation', type='number', min=0, step=0.000001)],
+                    width={'size': spacing['float_input']})])
         ])
 
     def check_input(self, test_param_values, test_param_values_ids, test_param_data, test_param_data_ids, **kwargs):
@@ -200,16 +221,35 @@ class TTest(BasicTest):
         test_parameters = self.test_params_to_dict(test_param_values, test_param_values_ids, test_param_data,
                                                    test_param_data_ids)
 
-        if 'cohens_d' not in test_parameters.keys():
-            return True, 'Please fill in a value for the effect size.'
+        means = np.asarray(test_parameters['means'])
 
-        if test_parameters['cohens_d'] is None:
-            return True, 'Please fill in a value for the effect size.'
-        
-        if test_parameters['cohens_d'] == 0:
-            return True, 'Effect size cannot be zero. Please check your input.'
+        if np.any(means == ''):
+            return True, 'Please fill in all cells for the means input table.'
+        if abs(means[:, 1] - means[:, 0]) < 10 ** -9:
+            return True, 'Please fill in different means for both groups.'
+        if 'sd' not in test_parameters.keys() or test_parameters['sd'] is None:
+            return True, 'Please fill in a value for the standard deviation.'
+        if test_parameters['sd'] < 10 ** -9:
+            return True, 'Standard deviation cannot be zero. Please fill in a different value.'
+
+        test_parameters['cohens_d'] = abs(means[:, 1] - means[:, 0])/test_parameters['sd']
+
+        del test_parameters['means']
+        del test_parameters['sd']
 
         return False, test_parameters
+
+    def fixed_sample_size(self, alpha, beta, test_param_values, test_param_values_ids, test_param_data,
+                          test_param_data_ids, **kwargs):
+        problem, test_parameters = self.check_input(test_param_values, test_param_values_ids, test_param_data,
+                                                    test_param_data_ids)
+        if problem:
+            return 'warning', test_parameters
+
+        n, typeII = t_test_functions.give_fixed_sample_size(test_parameters['cohens_d'], alpha, beta,
+                                                            test_parameters['sides'])
+
+        return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
 
     @staticmethod
     def simulate_statistics(n_simulations, sample_sizes, hypothesis, test_parameters):
@@ -238,7 +278,7 @@ class OneWay(BasicTest):
             self.VarGroups,
 
             html.Br(),
-            dbc.Row(dbc.Col(label('Expected means per group and standard deviation'),
+            dbc.Row(dbc.Col(label('Pessimistic means per group and standard deviation'),
                             width={'offset': spacing['offset'], 'size': spacing['size']})),
             dbc.Row([dbc.Col(
                 dash_table.DataTable(id={'type': 'test parameter', 'name': 'means', 'form': 'datatable'},
@@ -253,7 +293,7 @@ class OneWay(BasicTest):
                         width=spacing['float_input'])])])
 
     @staticmethod
-    def update_test_parameter_input(n_groups, rows, *args, **kwargs):
+    def update_input_table(n_groups, rows, *args, **kwargs):
         """ Overwritten from the parent class. Make sure the number of input fields
         for the means match the number of experimental groups. """
 

@@ -13,7 +13,7 @@ _min_accuracy = 10 ** -4
 _max_accuracy = 10 ** -1
 
 layout = html.Div([
-    my_jumbo_box('Interim analyses', 'Changes over time'),
+    my_jumbo_box('Simulations', 'Get your results'),
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                     children=[
                         html.Br(),
@@ -40,8 +40,10 @@ layout = html.Div([
                     children=[
                         html.Br(),
                         label('Download a more detailed report'), html.Br(),
-                        regular_text('The excel file is more complete as it contains a tab showing your design ' +
-                                     'input. The csv file only contains the output and its standard errors.'),
+                        regular_text('The csv file contains the unrounded estimates of the values above plus a few '
+                                     'more, and each of their standard errors. The excel file has a tab with the same'
+                                     'information as the csv file and an additional tab showing your design input.'
+                                     ),
                         html.Br(),
                         dbc.Button('Download CSV', id='csv_button', color='primary', outline=True),
                         dbc.Button('Download excel', id='excel_button', color='primary', outline=True),

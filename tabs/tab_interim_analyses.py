@@ -10,6 +10,10 @@ from layout_instructions import label, my_jumbo_box, table_style
 layout = html.Div([
     my_jumbo_box('Interim analyses', 'Changes over time'),
 
+    html.Br(),
+    dbc.Row(dbc.Col(dbc.Alert(id='fixed-n', is_open=False, dismissable=True),
+                    width={'offset': spacing['offset'], 'size': 'auto'})),
+
     html.Div(id='test_input_tab2',
              children=TestObject(test_options[0]["value"]).tab_interim_analyses()),
 

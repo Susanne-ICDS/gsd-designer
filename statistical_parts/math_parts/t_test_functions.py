@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import norm
 from scipy.stats import t
 from scipy.stats import nct
 from scipy.optimize import root_scalar
@@ -84,3 +85,20 @@ def give_exact(sample_sizes, alphas, betas, cohens_d, sides):
             nct.cdf(-sig_bounds, df=degrees_freedom, nc=non_central_param)
 
         return sig_bounds, fut_bounds, exact_true_neg, exact_power
+
+
+def give_fixed_sample_size(cohens_d, alpha, beta, sides):
+    if sides == 'one':
+        sides = 1
+    else:
+        sides = 2
+
+    n = int(np.round(((norm.ppf(1 - alpha/sides) + norm.ppf(1-beta, loc=cohens_d))/cohens_d)**2))
+    typeII = nct.cdf(t.ppf(1 - alpha/sides, df=2*n-2), df=2*n-2, nc=cohens_d * (n**2 / (2*n)) ** 0.5)
+
+    while typeII > beta:
+        n = n + 1
+        typeII = nct.cdf(t.ppf(1 - alpha / sides, df=2 * n - 2), df=2 * n - 2, nc=cohens_d * (n ** 2 / (2 * n)) ** 0.5)
+
+    return n, typeII
+

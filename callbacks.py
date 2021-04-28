@@ -17,7 +17,7 @@ from statistical_parts.math_parts.error_spending_simulation import simulation_lo
 
 from layout_instructions import table_style, disabled_style_header, disabled_style_data
 
-_default_n_repeats = 100
+_default_n_repeats = 20
 _max_n_repeats = 10 ** 6
 
 
@@ -154,12 +154,34 @@ def resize_rows(n_groups, rows, stat_test):
     Input('n_groups', 'value'),
     State('stat_test', 'value'),
     State({'type': 'test parameter', 'name': MATCH, 'form': 'datatable'}, 'data'))
-def update_test_input(n_groups, stat_test, rows):
+def update_input_table(n_groups, stat_test, rows):
     """ Adjust the test specific parameter input if necessary """
 
     if rows is not None and n_groups is not None:
-        return TestObject(stat_test).update_test_parameter_input(n_groups=n_groups, rows=rows)
+        return TestObject(stat_test).update_input_table(n_groups=n_groups, rows=rows)
 
+    raise PreventUpdate
+
+
+@app.callback(
+    Output('fixed-n', 'is_open'),
+    Output('fixed-n', 'color'),
+    Output('fixed-n', 'children'),
+    Input('url', 'pathname'),
+    State('stat_test', 'value'),
+    State('alpha', 'value'),
+    State('beta', 'value'),
+    State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'value'),
+    State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'id'),
+    State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'data'),
+    State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'id')
+)
+def give_n(path, stat_test, alpha, beta, test_param_values, test_param_values_ids, test_param_data,
+           test_param_data_ids):
+    if path == '/interim-analyses':
+        color, message = TestObject(stat_test).fixed_sample_size(alpha, beta, test_param_values, test_param_values_ids,
+                                                                 test_param_data, test_param_data_ids)
+        return True, color, message
     raise PreventUpdate
 # endregion
 
@@ -463,7 +485,10 @@ def print_the_table(df, relTol, model_info):
         # Hide the infinite significance bounds when only using beta spending
         column_order = column_order + ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)]
 
-    return dash_table.DataTable(columns=[{"name": i, "id": i} for i in column_order],
+    column_order = column_order + ['Power at analysis {}'.format(n_analyses), 'Expected cost H0', 'Expected cost HA']
+    column_names = column_order[:-3] + ['Power'] + column_order[-2:]
+
+    return dash_table.DataTable(columns=[{"name": column_names[i], "id": item} for (i, item) in enumerate(column_order)],
                                 data=results_dict, editable=False, **table_style)
 
 
@@ -490,7 +515,7 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
     std_errors = pd.read_json(df[1], orient='split')
 
     newCols = ['Model id']
-    for (i, col) in enumerate(df.columns[1:]):
+    for (i, col) in enumerate(estimates.columns[1:]):
         newCols = newCols + [col, 'SE {}'.format(i+1)]
         estimates['SE {}'.format(i+1)] = std_errors[col]
 
