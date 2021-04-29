@@ -41,14 +41,14 @@ app.layout = html.Div([navbar.bar, dbc.Container([
 
     dbc.Row([dbc.Col(width={'size': 5},
                      children=[html.A([html.Img(src=BISI_LOGO, alt='BISI Logo', height='175rem')],
-                                      href='bisi.research.vub.be'),
+                                      href='https://bisi.research.vub.be'),
                                html.Br(),
                                html.Br(),
                                'Laarbeeklaan 103, 1090 Jette',
                                html.Br(), 'Brussels, Belgium',
                                html.Br(), html.Br(),
-                               html.A('bisi.research.vub.be', href='bisi.research.vub.be', style={'color': '#fff'}),
-                               html.Br(), html.A('icds.be', href='icds.be', style={'color': '#fff'})
+                               html.A('bisi.research.vub.be', href='https://bisi.research.vub.be', style={'color': '#fff'}),
+                               html.Br(), html.A('icds.be', href='https://icds.be', style={'color': '#fff'})
                                ],
                      style={'textAlign': 'center'}),
              dbc.Col(width={'size': 3},
