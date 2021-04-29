@@ -2,8 +2,7 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 
-import git
-import time
+import datetime
 
 from app import app, server
 import callbacks
@@ -13,11 +12,8 @@ from tabs import navbar, tab_basic_design, tab_interim_analyses, tab_error_spend
 from layout_instructions import spacing_variables as spacing
 
 BISI_LOGO = '/assets/Logos.svg'
+version = '1.1.' + str(int(open("version.txt", "r").read()))
 
-# Get the most recent commit date
-# repo = git.Repo("./.git")
-# head_commit = repo.head.commit
-# time.asctime(time.gmtime(head_commit.committed_date))
 
 app.layout = html.Div([navbar.bar, dbc.Container([
 
@@ -43,12 +39,16 @@ app.layout = html.Div([navbar.bar, dbc.Container([
 
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),
 
-    dbc.Row([dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
-                     children=[html.Img(src=BISI_LOGO, alt='BISI Logo', height='175rem'),
+    dbc.Row([dbc.Col(width={'size': 5},
+                     children=[html.A([html.Img(src=BISI_LOGO, alt='BISI Logo', height='175rem')],
+                                      href='bisi.research.vub.be'),
                                html.Br(),
                                html.Br(),
                                'Laarbeeklaan 103, 1090 Jette',
-                               html.Br(), 'Brussels, Belgium'
+                               html.Br(), 'Brussels, Belgium',
+                               html.Br(), html.Br(),
+                               html.A('bisi.research.vub.be', href='bisi.research.vub.be', style={'color': '#fff'}),
+                               html.Br(), html.A('icds.be', href='icds.be', style={'color': '#fff'})
                                ],
                      style={'textAlign': 'center'}),
              dbc.Col(width={'size': 3},
@@ -63,12 +63,12 @@ app.layout = html.Div([navbar.bar, dbc.Container([
                                ]),
              dbc.Col(width={'size': 3},
                      children=[html.Br(),
-                               'App developed by: Susanne Blotwijk',
-                               html.Br(), 'Most recent update: 29 Apr. 2021'
-                               # '{}'.format(time.strftime("%d %b %Y, %H:%M", time.gmtime(head_commit.committed_date)))
+                               'App developed by: Susanne Blotwijk', html.Br(),
+                               html.Br(), 'Version: ' + version, html.Br(),
+                               html.Br(), 'Copyright: 2021-{}'.format(datetime.datetime.now().year),
                                ])],
             style={'color': '#fff', 'background-color': '#1E1E1E', 'font-family': 'Roboto'},
-            justify="begin"),
+            justify="center"),
 
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),
 
