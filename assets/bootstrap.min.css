@@ -19,10 +19,5 @@
 
 @font-face {
 font-family: “Roboto”;
-src: url(Roboto-Regular.ttf) format(“truetype”);
-}
-
-@font-face {
-font-family: “ICT Avantgarde”;
-src: url(/itc-avant-garde-gothic-std-cufonfonts/ITCAvantGardeStdMd.ttf) format(“truetype”);
+src: url(“/assets/Roboto-Regular.ttf”) format(“truetype”);
 }
