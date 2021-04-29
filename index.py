@@ -12,6 +12,7 @@ from tabs import navbar, tab_basic_design, tab_interim_analyses, tab_error_spend
 
 from layout_instructions import spacing_variables as spacing
 
+BISI_LOGO = '/assets/Logos.svg'
 
 # Get the most recent commit date
 # repo = git.Repo("./.git")
@@ -42,26 +43,32 @@ app.layout = html.Div([navbar.bar, dbc.Container([
 
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),
 
-    dbc.Row([dbc.Col(width={'size': 3, 'offset': spacing['offset']},
-                     children=['BISI logo and info',
-                               html.Br(), 'ICDS logo and info',
-                               html.Br(), 'Laarbeeklaan etc. etc.',
-                               html.Br(), 'mail?'
-                               ]),
+    dbc.Row([dbc.Col(width={'size': 'auto', 'offset': spacing['offset']},
+                     children=[html.Img(src=BISI_LOGO, alt='BISI Logo', height='175rem'),
+                               html.Br(),
+                               html.Br(),
+                               'Laarbeeklaan 103, 1090 Jette',
+                               html.Br(), 'Brussels, Belgium'
+                               ],
+                     style={'textAlign': 'center'}),
              dbc.Col(width={'size': 3},
-                     children=['Code and documentation on ',
+                     children=[html.Br(),
+                               'Code and documentation: ',
                                html.A('Github', href='https://github.com/Susanne-ICDS/gsd-designer',
-                                      style={'color': '#fff'}),
-                               html.Br(), 'Publication: Coming soon',
-                               html.Br(), 'Document with example: Coming soon'
+                                      style={'color': '#fff', 'text-decoration': 'underline'}),
+                               html.Br(), html.Br(),
+                               'Citable publication: Coming soon',
+                               html.Br(), html.Br(),
+                               'Tutorial: Coming soon'
                                ]),
              dbc.Col(width={'size': 3},
-                     children=['App developed by: Susanne Blotwijk',
-                               html.Br(), 'Most recent update: 25 Apr. 2021'
+                     children=[html.Br(),
+                               'App developed by: Susanne Blotwijk',
+                               html.Br(), 'Most recent update: 29 Apr. 2021'
                                # '{}'.format(time.strftime("%d %b %Y, %H:%M", time.gmtime(head_commit.committed_date)))
                                ])],
-            style={'color': '#fff', 'background-color': '#1E1E1E', 'font-family': 'roboto'},
-            justify="center"),
+            style={'color': '#fff', 'background-color': '#1E1E1E', 'font-family': 'Roboto'},
+            justify="begin"),
 
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),
 
