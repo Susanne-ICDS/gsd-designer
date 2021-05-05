@@ -178,8 +178,8 @@ class BasicTest:
         return False, test_parameters
 
     @staticmethod
-    def fixed_sample_size(**kwargs):
-        return 'Secondary', 'The fixed sample size calculation has not yet been implemented for this test.'
+    def fixed_sample_size(*args, **kwargs):
+        return 'secondary', 'The fixed sample size calculation has not yet been implemented for this test.'
 
 
 class TTest(BasicTest):
@@ -252,14 +252,14 @@ class TTest(BasicTest):
         return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
 
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, test_parameters):
+    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
         """ Simulate the test statistics """
 
         if hypothesis == 'H0':
-            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, cohens_d=0,
+            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, cohens_d=0,
                                                         sides=test_parameters['sides'])
         if hypothesis == 'HA':
-            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, **test_parameters)
+            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, **test_parameters)
 
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):
@@ -335,15 +335,15 @@ class OneWay(BasicTest):
         return False, test_parameters
 
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, test_parameters):
+    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
         """ Simulate the test statistics """
 
         if hypothesis == 'H0':
-            return one_way_functions.simulate_statistics(n_simulations, sample_sizes,
+            return one_way_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit,
                                                          means=np.zeros(sample_sizes.shape[0]),
                                                          sd=test_parameters['sd'])
         else:
-            return one_way_functions.simulate_statistics(n_simulations, sample_sizes, **test_parameters)
+            return one_way_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, **test_parameters)
 
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):

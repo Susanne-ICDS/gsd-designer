@@ -206,7 +206,7 @@ def simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names,
         sig_bounds, fut_bounds, mean_cost_h0, mean_cost_ha, power, true_negatives = \
             simulate_empirical_bounds(alphas[sims_needed, :], betas[sims_needed, :], exact_sig[sims_needed],
                                       exact_fut[sims_needed], simulator_h0, simulator_ha, costs, n_simulations,
-                                      n_repeats, exact_true_neg, exact_power)
+                                      n_repeats, exact_true_neg[sims_needed], exact_power[sims_needed])
 
         sims_df = sims_df.append(pd.DataFrame(
             np.concatenate((label(sims_needed),

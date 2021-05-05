@@ -8,5 +8,9 @@ venv
 *.pyc
 .DS_Store
 .env
+.dat
 
-!.git
+test_and_timer.py
+test_code.py
+memprof.bat
+push.bat

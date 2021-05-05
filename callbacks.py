@@ -17,7 +17,7 @@ from statistical_parts.math_parts.error_spending_simulation import simulation_lo
 
 from layout_instructions import table_style, disabled_style_header, disabled_style_data
 
-_default_n_repeats = 20
+_default_n_repeats = 10
 _max_n_repeats = 10 ** 6
 
 
@@ -299,141 +299,142 @@ def add_row(n_clicks, n_analyses, rows, columns):
 # endregion
 
 
-@app.callback(
-    Output('status', 'children'),
-    Output('status', 'color'),
-    Output('status', 'is_open'),
-    Output('identify_model', 'data'),
-    Output('estimates', 'data'),
-    Input('button', 'n_clicks'),
-    State('n_analyses', 'value'),
-    State('n_groups', 'value'),
-    State('sample_sizes', 'derived_viewport_data'),
-    State('alpha', 'value'),
-    State('beta', 'value'),
-    State('spending', 'value'),
-    State('relative-tolerance', 'value'),
-    State('CI', 'value'),
-    State('costs', 'data'),
-    State('error_type', 'value'),
-    State('information-ratio-table', 'data'),
-    State('error-spending-function', 'value'),
-    State('error-spending-table', 'data'),
-    State('stat_test', 'value'),
-    State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'value'),
-    State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'id'),
-    State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'data'),
-    State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'id'))
-def check_n_evaluate(n_clicks, n_analyses, n_groups, sample_sizes, alpha, beta, spending, rel_tol, CI, costs,
-                     error_type, taus, error_spending_function, error_spent, stat_test, test_param_values,
-                     test_param_values_ids, test_param_data, test_param_data_ids):
-    """ Evaluate and simulate the properties of the design
-    Step 1: Check if the user input is complete and makes sense
-    Step 2: Calculate the exact properties, i.e. the properties at the first analysis.
-    Step 3: Simulate the remaining properties until the desired precision level has been reached."""
+def create_evaluation(local, memory_limit):
+    @app.callback(
+        Output('status', 'children'),
+        Output('status', 'color'),
+        Output('status', 'is_open'),
+        Output('identify_model', 'data'),
+        Output('estimates', 'data'),
+        Input('button', 'n_clicks'),
+        State('n_analyses', 'value'),
+        State('n_groups', 'value'),
+        State('sample_sizes', 'derived_viewport_data'),
+        State('alpha', 'value'),
+        State('beta', 'value'),
+        State('spending', 'value'),
+        State('relative-tolerance', 'value'),
+        State('CI', 'value'),
+        State('costs', 'data'),
+        State('error_type', 'value'),
+        State('information-ratio-table', 'data'),
+        State('error-spending-function', 'value'),
+        State('error-spending-table', 'data'),
+        State('stat_test', 'value'),
+        State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'value'),
+        State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'id'),
+        State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'data'),
+        State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'id'))
+    def check_n_evaluate(n_clicks, n_analyses, n_groups, sample_sizes, alpha, beta, spending, rel_tol, CI, costs,
+                         error_type, taus, error_spending_function, error_spent, stat_test, test_param_values,
+                         test_param_values_ids, test_param_data, test_param_data_ids):
+        """ Evaluate and simulate the properties of the design
+        Step 1: Check if the user input is complete and makes sense
+        Step 2: Calculate the exact properties, i.e. the properties at the first analysis.
+        Step 3: Simulate the remaining properties until the desired precision level has been reached."""
 
-    if n_clicks is None:
-        raise PreventUpdate
+        if n_clicks is None:
+            raise PreventUpdate
 
-    error_color = 'warning'
+        error_color = 'warning'
 
-    # region check user input
-    # region check small input fields
-    if n_analyses is None:
-        return 'Please make sure you enter a valid number of analyses.', \
-               error_color, True, dash.no_update, dash.no_update
-    if n_groups is None:
-        return 'Please make sure you enter a valid number of experimental groups.', \
-               error_color, True, dash.no_update, dash.no_update
+        # region check user input
+        # region check small input fields
+        if n_analyses is None:
+            return 'Please make sure you enter a valid number of analyses.', \
+                   error_color, True, dash.no_update, dash.no_update
+        if n_groups is None:
+            return 'Please make sure you enter a valid number of experimental groups.', \
+                   error_color, True, dash.no_update, dash.no_update
 
-    if alpha is None or beta is None:
-        return 'Please make sure you fill in a probability for the type I and type II error.', \
-               error_color, True, dash.no_update, dash.no_update
-    if (alpha == 1 or alpha == 0) or (beta == 1 or beta == 0):
-        return 'The type I and type II errors should be between 0 and 1, they cannot be equal to 0 or 1. ' + \
-               'Please check your input', error_color, True, dash.no_update, dash.no_update
+        if alpha is None or beta is None:
+            return 'Please make sure you fill in a probability for the type I and type II error.', \
+                   error_color, True, dash.no_update, dash.no_update
+        if (alpha == 1 or alpha == 0) or (beta == 1 or beta == 0):
+            return 'The type I and type II errors should be between 0 and 1, they cannot be equal to 0 or 1. ' + \
+                   'Please check your input', error_color, True, dash.no_update, dash.no_update
 
-    if rel_tol is None or CI is None:
-        return 'Please make sure the simulation precision parameters are filled in.', \
-               error_color, True, dash.no_update, dash.no_update
-    if CI == 1 or CI == 0:
-        return 'The confidence level should be between 0 and 1, but cannot be equal to 0 or 1. ' + \
-               'Please check your input', error_color, True, dash.no_update, dash.no_update
-    # endregion
+        if rel_tol is None or CI is None:
+            return 'Please make sure the simulation precision parameters are filled in.', \
+                   error_color, True, dash.no_update, dash.no_update
+        if CI == 1 or CI == 0:
+            return 'The confidence level should be between 0 and 1, but cannot be equal to 0 or 1. ' + \
+                   'Please check your input', error_color, True, dash.no_update, dash.no_update
+        # endregion
 
-    problem, message = TestObject(stat_test).check_sample_size(sample_sizes, n_analyses)
-    if problem:
-        return message, error_color, True, dash.no_update, dash.no_update
+        problem, message = TestObject(stat_test).check_sample_size(sample_sizes, n_analyses)
+        if problem:
+            return message, error_color, True, dash.no_update, dash.no_update
 
-    sample_sizes = message
+        sample_sizes = message
 
-    # region check costs
-    if np.any([costs[0]['analysis-{}'.format(i)] == '' for i in range(n_analyses)]):
-        return 'Please fill in all cells for the costs input table', \
-               error_color, True, dash.no_update, dash.no_update
+        # region check costs
+        if np.any([costs[0]['analysis-{}'.format(i)] == '' for i in range(n_analyses)]):
+            return 'Please fill in all cells for the costs input table', \
+                   error_color, True, dash.no_update, dash.no_update
 
-    costs = np.array(pd.DataFrame(costs), dtype='d')
+        costs = np.array(pd.DataFrame(costs), dtype='d')
 
-    if np.any(costs[1:] < costs[:-1]):
-        return 'The total costs should not decrease between two analyses. Please check your input.', \
-               error_color, True, dash.no_update, dash.no_update
-    if np.any(costs <= 0):
-        'Experiments are not free. Please make sure all costs are larger than 0.'
-    # endregion
+        if np.any(costs[1:] < costs[:-1]):
+            return 'The total costs should not decrease between two analyses. Please check your input.', \
+                   error_color, True, dash.no_update, dash.no_update
+        if np.any(costs <= 0):
+            'Experiments are not free. Please make sure all costs are larger than 0.'
+        # endregion
 
-    problem, message = check_form_error_spent(error_type, n_analyses, spending, alpha, beta,
-                                              taus, error_spending_function, error_spent)
-    if problem:
-        return message, error_color, True, dash.no_update, dash.no_update
+        problem, message = check_form_error_spent(error_type, n_analyses, spending, alpha, beta,
+                                                  taus, error_spending_function, error_spent)
+        if problem:
+            return message, error_color, True, dash.no_update, dash.no_update
 
-    alphas = message[0]
-    betas = message[1]
-    error_spending_param = message[2]
+        alphas = message[0]
+        betas = message[1]
+        error_spending_param = message[2]
 
-    problem, message = TestObject(stat_test).check_input(test_param_values, test_param_values_ids, test_param_data,
+        problem, message = TestObject(stat_test).check_input(test_param_values, test_param_values_ids, test_param_data,
                                                          test_param_data_ids, n_groups=n_groups)
-    if problem:
-        return message, error_color, True, dash.no_update, dash.no_update
-    else:
-        test_param_values = message
-    # endregion
+        if problem:
+            return message, error_color, True, dash.no_update, dash.no_update
+        else:
+            test_param_values = message
+        # endregion
 
-    # region Summarize user input, plus give id's to the different designs/models
-    identify_model = {'Test': stat_test, 'Number of analyses': n_analyses, 'Sample sizes': sample_sizes.tolist(),
-                      'Costs': costs.tolist(), 'Type I': alpha, 'Type II': beta, 'Spending': spending,
-                      **test_param_values, **error_spending_param}
-    # endregion
+        # region Summarize user input, plus give id's to the different designs/models
+        identify_model = {'Test': stat_test, 'Number of analyses': n_analyses, 'Sample sizes': sample_sizes.tolist(),
+                          'Costs': costs.tolist(), 'Type I': alpha, 'Type II': beta, 'Spending': spending,
+                          **test_param_values, **error_spending_param}
+        # endregion
 
-    # region Perform the simulations until the confidence interval for relative error is smaller than tolerance level
-    exact_sig, exact_fut, exact_true_neg, exact_power = \
-        TestObject(stat_test).give_exact(sample_sizes, alphas, betas, test_param_values)
+        # region Simulate until the confidence interval for relative error is smaller than tolerance level
+        exact_sig, exact_fut, exact_true_neg, exact_power = \
+            TestObject(stat_test).give_exact(sample_sizes, alphas, betas, test_param_values)
 
-    def simulator_h0(n_sim):
-        return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'H0', test_param_values)
+        def simulator_h0(n_sim):
+            return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'H0', memory_limit, test_param_values)
 
-    def simulator_ha(n_sim):
-        return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'HA', test_param_values)
+        def simulator_ha(n_sim):
+            return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'HA', memory_limit, test_param_values)
 
-    # Name all the properties being simulated
-    col_names = ['Model id'] + ['Sig. bound {}'.format(i + 1) for i in range(n_analyses)] + \
-                ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)] + \
-                ['Expected cost H0', 'Expected cost HA'] + \
-                ['Power at analysis {}'.format(i + 1) for i in range(n_analyses)] + \
-                ['Chance of true negative under H0 at analysis {}'.format(i + 1) for i in range(n_analyses)]
+        # Name all the properties being simulated
+        col_names = ['Model id'] + ['Sig. bound {}'.format(i + 1) for i in range(n_analyses)] + \
+                    ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)] + \
+                    ['Expected cost H0', 'Expected cost HA'] + \
+                    ['Power at analysis {}'.format(i + 1) for i in range(n_analyses)] + \
+                    ['Chance of true negative under H0 at analysis {}'.format(i + 1) for i in range(n_analyses)]
 
-    estimates, std_errors, n_simulations, counts = \
-        simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, identify_model['Model id'],
-                        _default_n_repeats, _max_n_repeats, simulator_h0, simulator_ha, costs,
-                        exact_true_neg, exact_power)
-    # endregion
+        estimates, std_errors, n_simulations, counts = \
+            simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, identify_model['Model id'],
+                            _default_n_repeats, _max_n_repeats, simulator_h0, simulator_ha, costs, exact_true_neg,
+                            exact_power)
+        # endregion
 
-    estimates = estimates.astype(str)
-    std_errors = std_errors.astype(str)
-    # The string type-casting is because json serialization does not support infinite values
+        estimates = estimates.astype(str)
+        std_errors = std_errors.astype(str)
+        # The string type-casting is because json serialization does not support infinite values
 
-    return [html.B('Simulations finished: '), 'Results based on {} estimates'.format(np.asarray(counts[col_names[1]])) +
-                                              ' with {} simulations each'.format(n_simulations)], \
-        'success', True, identify_model, [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
+        return [html.B('Simulations finished: '), 'Results based on {} estimates'.format(np.asarray(counts[col_names[1]])) +
+                                                  ' with {} simulations each'.format(n_simulations)], \
+            'success', True, identify_model, [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
 
 
 @app.callback(

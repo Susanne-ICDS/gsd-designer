@@ -1,14 +1,16 @@
 import numpy as np
+from scipy.stats import norm
 from scipy.stats import f
 from scipy.stats import ncf
 
 
-def simulate_statistics(n_simulations, sample_sizes, means, sd):
+def simulate_statistics(n_simulations, sample_sizes, memory_limit, means, sd):
     """ Simulate test statistics for a one-way ANOVA
 
     Simulate [param: n_simulations] test statistics for a t-test with group means [param: means] and standard
     deviation [param: sd]. """
     sample_sizes = np.asarray(sample_sizes).astype(int)
+    total_sample_sizes = np.sum(sample_sizes, axis=0)
 
     n_analyses = int(sample_sizes.shape[1])
     n_groups = int(sample_sizes.shape[0])
@@ -16,27 +18,47 @@ def simulate_statistics(n_simulations, sample_sizes, means, sd):
     # Theoretical group means
     means = np.asarray(means).reshape(n_groups)
 
-    # Object for storing sample means
-    group_mean = np.zeros((n_simulations, n_analyses, n_groups))
-    within_group_SS = np.zeros((n_simulations, n_analyses, n_groups))
+    sim_limit = int(np.floor(0.9 * (10 ** 9 / 8 * memory_limit - n_simulations * n_analyses) /
+                             (2 * np.max(sample_sizes[:, -1]) + 4 * n_analyses)))
+    repeats = int(np.ceil(n_simulations / sim_limit))
+    sim_per_rep = int(np.ceil(n_simulations / repeats))
+    dif = n_simulations - repeats * sim_per_rep
+    sims = sim_per_rep
 
-    for i in range(n_groups):
-        xs = np.random.normal(loc=means[i], scale=sd, size=(n_simulations, sample_sizes[i, -1]))
-        group_mean[:, :, i] = (np.cumsum(xs, axis=1)[:, sample_sizes[i, :] - 1] / sample_sizes[i, :])
+    Fs = np.zeros((n_analyses, n_simulations))
+    for r in range(repeats):
+        if r == repeats - 1:
+            sims = sim_per_rep + dif
 
-        for j in range(n_analyses):
-            within_group_SS[:, j, i] = np.sum((group_mean[:, j, i][:, np.newaxis] - xs[:, :sample_sizes[i, j]]) ** 2,
-                                              axis=1)
-    sample_sizes = sample_sizes.transpose()[np.newaxis, :]
-    total_sample_sizes = np.sum(sample_sizes, axis=2)
-    grand_mean = np.sum(group_mean * sample_sizes, axis=2) / total_sample_sizes
+        # Object for storing sample means
+        group_mean = np.zeros((sims, n_analyses, n_groups))
+        within_group_var = np.zeros((sims, n_analyses))
 
-    within_group_var = np.sum(within_group_SS, axis=2) / (total_sample_sizes - n_groups)
-    between_group_var = np.sum(total_sample_sizes[:, :, np.newaxis] *
-                               (group_mean - grand_mean[:, :, np.newaxis]) ** 2, axis=2) / (n_groups - 1)
+        for i in range(n_groups):
+            xs = np.random.normal(loc=means[i], scale=sd, size=(sims, sample_sizes[i, -1]))
+            group_mean[:, :, i] = (np.cumsum(xs, axis=1)[:, sample_sizes[i, :] - 1] / sample_sizes[i, :])
 
-    Fs = between_group_var/within_group_var
-    return Fs.transpose()
+            for j in range(n_analyses):
+                within_group_var[:, j] += np.sum((group_mean[:, j, i][:, np.newaxis] - xs[:, :sample_sizes[i, j]]) ** 2,
+                                                 axis=1)
+            del xs
+
+        group_mean = group_mean.transpose()
+        within_group_var = within_group_var.transpose() / (total_sample_sizes[:, np.newaxis] - n_groups)
+
+        grand_mean = np.sum(group_mean * sample_sizes[:, :, np.newaxis], axis=0) / \
+            total_sample_sizes[:, np.newaxis]
+
+        between_group_var = np.sum(total_sample_sizes[np.newaxis, :, np.newaxis] *
+                                   (group_mean - grand_mean[np.newaxis, :, :]) ** 2, axis=0) / (n_groups - 1)
+
+        del grand_mean, group_mean
+
+        Fs[:,  (r * sim_per_rep):(r * sim_per_rep + sims)] = between_group_var/within_group_var
+
+        del between_group_var, within_group_var
+
+    return Fs
 
 
 def give_exact(sample_sizes, alphas, betas, means, sd):
@@ -56,8 +78,33 @@ def give_exact(sample_sizes, alphas, betas, means, sd):
 
     sig_bounds = f.ppf(1 - alphas[:, 0], dfn=n_groups-1, dfd=denom_degrees_freedom)
     fut_bounds = ncf.ppf(betas[:, 0], dfn=n_groups-1, dfd=denom_degrees_freedom, nc=non_central_param)
+    fut_bounds[fut_bounds > sig_bounds] = sig_bounds[fut_bounds > sig_bounds]
+    fut_bounds[np.isnan(fut_bounds)] = sig_bounds[np.isnan(fut_bounds)]
 
     exact_true_neg = f.cdf(fut_bounds, dfn=n_groups-1, dfd=denom_degrees_freedom)
     exact_power = 1 - ncf.cdf(sig_bounds, dfn=n_groups-1, dfd=denom_degrees_freedom, nc=non_central_param)
+    exact_power[np.isnan(exact_power)] = 1 - 10**-8
 
     return sig_bounds, fut_bounds, exact_true_neg, exact_power
+
+
+def give_fixed_sample_size(means, sd, alpha, beta, sides):
+    expected_means = np.asarray(means)
+    n_groups = expected_means.size
+    expected_means = expected_means.reshape(n_groups)
+
+    grand_mean = np.sum(expected_means) / n_groups
+    cohens_d = np.sum(np.abs(expected_means - grand_mean)/sd)
+    n = int(np.round(((norm.ppf(1 - alpha) + norm.ppf(1-beta, loc=cohens_d))/cohens_d)**2))
+
+    non_central_param = np.sum(n * (expected_means - grand_mean) ** 2) / sd ** 2
+    typeII = ncf.cdf(f.ppf(1 - alpha, dfn=n_groups-1, dfd=n_groups*(n-1)), nc=non_central_param,
+                     dfn=n_groups-1, dfd=n_groups*(n-1))
+
+    while typeII > beta:
+        n = n + 1
+        non_central_param = np.sum(n * (expected_means - grand_mean) ** 2) / sd ** 2
+        typeII = ncf.cdf(f.ppf(1 - alpha, dfn=n_groups - 1, dfd=n_groups * (n - 1)), nc=non_central_param,
+                         dfn=n_groups - 1, dfd=n_groups * (n - 1))
+
+    return n, typeII

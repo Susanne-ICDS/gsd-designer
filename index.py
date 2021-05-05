@@ -3,6 +3,7 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 
 import datetime
+import numpy as np
 
 from app import app, server
 import callbacks
@@ -13,7 +14,6 @@ from layout_instructions import spacing_variables as spacing
 
 BISI_LOGO = '/assets/Logos.svg'
 version = '1.1.' + str(int(open("version.txt", "r").read()))
-
 
 app.layout = html.Div([navbar.bar, dbc.Container([
 
@@ -40,14 +40,15 @@ app.layout = html.Div([navbar.bar, dbc.Container([
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),
 
     dbc.Row([dbc.Col(width={'size': 5},
-                     children=[html.A([html.Img(src=BISI_LOGO, alt='BISI Logo', height='175rem')],
-                                      href='https://bisi.research.vub.be'),
+                     children=[dbc.Container(html.A([html.Img(src=BISI_LOGO, alt='BISI Logo', height='175rem')],
+                                                    href='https://bisi.research.vub.be'), fluid=True),
                                html.Br(),
                                html.Br(),
                                'Laarbeeklaan 103, 1090 Jette',
                                html.Br(), 'Brussels, Belgium',
                                html.Br(), html.Br(),
-                               html.A('bisi.research.vub.be', href='https://bisi.research.vub.be', style={'color': '#fff'}),
+                               html.A('bisi.research.vub.be', href='https://bisi.research.vub.be',
+                                      style={'color': '#fff'}),
                                html.Br(), html.A('icds.be', href='https://icds.be', style={'color': '#fff'})
                                ],
                      style={'textAlign': 'center'}),
@@ -80,6 +81,10 @@ app.layout = html.Div([navbar.bar, dbc.Container([
     # This is a list of two json serialized pandas dataframes 1) the estimates and 2) their standard errors.
 
 ], fluid=True)])
+
+local = False
+memory_limit = 1 - 0.25  # in GigaByte
+callbacks.create_evaluation(local, memory_limit)
 
 if __name__ == '__main__':
     app.run_server(debug=True)

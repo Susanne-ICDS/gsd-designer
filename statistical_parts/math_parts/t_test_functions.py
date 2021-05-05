@@ -5,37 +5,53 @@ from scipy.stats import nct
 from scipy.optimize import root_scalar
 
 
-def simulate_statistics(n_simulations, sample_sizes, cohens_d, sides):
+def simulate_statistics(n_simulations, sample_sizes, memory_limit, cohens_d, sides):
     """ Simulate test statistics for an independent groups t-test
 
     Simulate [param: n_simulations] test statistics for a t-test with effect size [param: cohens_d] and
-    [param: sample_sizes]. [param: sides] determines if the test is treated as two-sided or one-sided. """
+    [param: sample_sizes]. [param: sides] determines if the test is treated as two-sided or one-sided.
+    The memory limit makes sure to break the simulation up in smaller pieces such that the allocated memory is not
+    exceeded too much."""
 
+    n_simulations = int(n_simulations)
     sample_sizes = np.asarray(sample_sizes)
     n_analyses = int(sample_sizes.shape[1])
     sample_sizes.astype(int)
+    Ts = np.zeros((n_analyses, n_simulations))
 
-    # Simulate the observations in both groups
-    x1 = np.random.normal(loc=0, size=n_simulations * sample_sizes[0, -1])
-    x2 = np.random.normal(loc=cohens_d, size=n_simulations * sample_sizes[1, -1])
+    sim_limit = int(np.floor(0.9 * (10 ** 9 / 8 * memory_limit - n_simulations * n_analyses) /
+                             (1.5 * np.max(sample_sizes[:, -1]) + 5 * n_analyses)))
+    repeats = int(np.ceil(n_simulations / sim_limit))
+    sim_per_rep = int(np.ceil(n_simulations / repeats))
+    dif = n_simulations - repeats * sim_per_rep
+    sims = sim_per_rep
 
-    x1 = np.reshape(x1, (sample_sizes[0, -1], n_simulations))
-    x2 = np.reshape(x2, (sample_sizes[1, -1], n_simulations))
+    for i in range(repeats):
+        if i == repeats - 1:
+            sims = sim_per_rep + dif
 
-    gr_mean1 = np.cumsum(x1, axis=0)[sample_sizes[0, :] - 1, :] / sample_sizes[0, :, np.newaxis]
-    gr_mean2 = np.cumsum(x2, axis=0)[sample_sizes[1, :] - 1, :] / sample_sizes[1, :, np.newaxis]
+        x = np.random.normal(loc=0, size=sims * sample_sizes[0, -1])
+        x = np.reshape(x, (sample_sizes[0, -1], sims))
 
-    SSE1 = np.zeros((n_analyses, n_simulations))
-    SSE2 = np.zeros((n_analyses, n_simulations))
+        gr_mean1 = np.cumsum(x, axis=0)[sample_sizes[0, :] - 1, :] / sample_sizes[0, :, np.newaxis]
+        SSE1 = np.zeros((n_analyses, sims))
+        for j in range(n_analyses):
+            SSE1[j, :] = np.sum((x[:sample_sizes[0, j], :] - gr_mean1[j, :]) ** 2, axis=0)
 
-    for j in range(n_analyses):
-        SSE1[j, :] = np.sum((x1[:sample_sizes[0, j], :] - gr_mean1[j, :]) ** 2, axis=0)
-        SSE2[j, :] = np.sum((x2[:sample_sizes[1, j], :] - gr_mean2[j, :]) ** 2, axis=0)
+        x = np.random.normal(loc=cohens_d, size=sims * sample_sizes[1, -1])
+        x = np.reshape(x, (sample_sizes[1, -1], sims))
 
-    n1 = sample_sizes[0, :, np.newaxis]
-    n2 = sample_sizes[1, :, np.newaxis]
+        gr_mean2 = np.cumsum(x, axis=0)[sample_sizes[1, :] - 1, :] / sample_sizes[1, :, np.newaxis]
+        SSE2 = np.zeros((n_analyses, sims))
+        for j in range(n_analyses):
+            SSE2[j, :] = np.sum((x[:sample_sizes[1, j], :] - gr_mean2[j, :]) ** 2, axis=0)
 
-    Ts = (gr_mean2 - gr_mean1) / ((1 / n1 + 1 / n2) * (SSE1 + SSE2) / (n1 + n2 - 2)) ** 0.5
+        Ts[:, (i * sim_per_rep):(i * sim_per_rep + sims)] = \
+            (gr_mean2 - gr_mean1) / ((1 / sample_sizes[0, :, np.newaxis] + 1 / sample_sizes[1, :, np.newaxis]) *
+                                     (SSE1 + SSE2) /
+                                     (sample_sizes[0, :, np.newaxis] + sample_sizes[1, :, np.newaxis] - 2)) ** 0.5
+        del gr_mean2, gr_mean1, SSE1, SSE2
+
     if sides == 'one':
         return Ts
     elif sides == 'two':
@@ -57,6 +73,7 @@ def give_exact(sample_sizes, alphas, betas, cohens_d, sides):
         # These are simply the mathematical formulas
         sig_bounds = t.ppf(1 - alphas[:, 0], df=degrees_freedom)
         fut_bounds = nct.ppf(betas[:, 0], df=degrees_freedom, nc=non_central_param)
+        fut_bounds[fut_bounds > sig_bounds] = sig_bounds[fut_bounds > sig_bounds]
 
         exact_true_neg = t.cdf(fut_bounds, df=degrees_freedom)
         exact_power = 1 - nct.cdf(sig_bounds, df=degrees_freedom, nc=non_central_param)
@@ -79,6 +96,9 @@ def give_exact(sample_sizes, alphas, betas, cohens_d, sides):
                    - betas[i, 0]
                 return dif
             fut_bounds[i] = root_scalar(try_fut_bound, bracket=[0, sig_bounds[i]], method='bisect').root
+
+        fut_bounds[fut_bounds > sig_bounds] = sig_bounds[fut_bounds > sig_bounds]
+        fut_bounds[np.isnan(fut_bounds)] = sig_bounds[np.isnan(fut_bounds)]
 
         exact_true_neg = 2 * t.cdf(fut_bounds, df=degrees_freedom) - 1
         exact_power = 1 - nct.cdf(sig_bounds, df=degrees_freedom, nc=non_central_param) + \
