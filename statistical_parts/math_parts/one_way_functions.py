@@ -88,14 +88,13 @@ def give_exact(sample_sizes, alphas, betas, means, sd):
     return sig_bounds, fut_bounds, exact_true_neg, exact_power
 
 
-def give_fixed_sample_size(means, sd, alpha, beta, sides):
+def give_fixed_sample_size(means, sd, alpha, beta):
     expected_means = np.asarray(means)
     n_groups = expected_means.size
     expected_means = expected_means.reshape(n_groups)
 
     grand_mean = np.sum(expected_means) / n_groups
-    cohens_d = np.sum(np.abs(expected_means - grand_mean)/sd)
-    n = int(np.round(((norm.ppf(1 - alpha) + norm.ppf(1-beta, loc=cohens_d))/cohens_d)**2))
+    n = 3
 
     non_central_param = np.sum(n * (expected_means - grand_mean) ** 2) / sd ** 2
     typeII = ncf.cdf(f.ppf(1 - alpha, dfn=n_groups-1, dfd=n_groups*(n-1)), nc=non_central_param,
@@ -108,3 +107,8 @@ def give_fixed_sample_size(means, sd, alpha, beta, sides):
                          dfn=n_groups - 1, dfd=n_groups * (n - 1))
 
     return n, typeII
+
+
+def get_p_equivalent(x, N):
+    n_groups = N.size
+    return 1-f.cdf(x, dfn=n_groups - 1, dfd=sum(N) - n_groups)

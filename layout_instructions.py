@@ -23,7 +23,8 @@ regular_text = html.Label
 table_style = {
     'css': [{'selector': '.dash-spreadsheet-container',
              'rule': 'border-radius: 6px; overflow: hidden;'}],
-    'style_cell': {'fontSize': 16, 'font-family': 'sans-serif', 'text-align': 'left', 'padding': '12px'},
+    'style_cell': {'fontSize': 16, 'font-family': 'sans-serif', 'text-align': 'left',
+                   'padding': '12px'},
     'style_header': {'color': 'white', 'background-color': vub_blue},
     'style_data': {'color': '#343a40', 'background-color': 'white'}}
 

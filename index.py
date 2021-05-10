@@ -39,10 +39,9 @@ app.layout = html.Div([navbar.bar, dbc.Container([
 
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),
 
-    dbc.Row([dbc.Col(width={'size': 5},
-                     children=[dbc.Container(html.A([html.Img(src=BISI_LOGO, alt='BISI Logo', height='175rem')],
-                                                    href='https://bisi.research.vub.be'), fluid=True),
-                               html.Br(),
+    dbc.Row([dbc.Col(lg={'size': 5}, md=8, sm=10, xs=12,
+                     children=[dbc.Container(html.A([html.Img(src=BISI_LOGO, alt='BISI Logo', className='img-fluid')],
+                                                    href='https://bisi.research.vub.be'), fluid=False),
                                html.Br(),
                                'Laarbeeklaan 103, 1090 Jette',
                                html.Br(), 'Brussels, Belgium',
@@ -52,7 +51,7 @@ app.layout = html.Div([navbar.bar, dbc.Container([
                                html.Br(), html.A('icds.be', href='https://icds.be', style={'color': '#fff'})
                                ],
                      style={'textAlign': 'center'}),
-             dbc.Col(width={'size': 3},
+             dbc.Col(lg=3, md={'size': 5, 'offset': spacing['offset']}, sm=7,
                      children=[html.Br(),
                                'Code and documentation: ',
                                html.A('Github', href='https://github.com/Susanne-ICDS/gsd-designer',
@@ -62,7 +61,7 @@ app.layout = html.Div([navbar.bar, dbc.Container([
                                html.Br(), html.Br(),
                                'Tutorial: Coming soon'
                                ]),
-             dbc.Col(width={'size': 3},
+             dbc.Col(lg=3, md=6, sm=7,
                      children=[html.Br(),
                                'App developed by: Susanne Blotwijk', html.Br(),
                                html.Br(), 'Version: ' + version, html.Br(),

@@ -122,3 +122,7 @@ def give_fixed_sample_size(cohens_d, alpha, beta, sides):
 
     return n, typeII
 
+
+def get_p_equivalent(x, N):
+    return 1-t.cdf(x, df=sum(N) - 2)
+

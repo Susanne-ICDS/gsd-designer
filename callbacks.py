@@ -4,9 +4,11 @@ import dash_html_components as html
 from dash.exceptions import PreventUpdate
 from dash.dependencies import Input, Output, State, MATCH, ALL
 from dash_extensions.snippets import send_data_frame, send_bytes
+import dash_bootstrap_components as dbc
 
 import pandas as pd
 import numpy as np
+from scipy.stats import norm
 import xlsxwriter
 
 from app import app
@@ -15,7 +17,8 @@ from statistical_parts.statistical_test_objects import TestObject
 from statistical_parts.error_spending import check_form_error_spent
 from statistical_parts.math_parts.error_spending_simulation import simulation_loop
 
-from layout_instructions import table_style, disabled_style_header, disabled_style_data
+from layout_instructions import table_style, disabled_style_header, disabled_style_data, label
+from layout_instructions import spacing_variables as spacing
 
 _default_n_repeats = 10
 _max_n_repeats = 10 ** 6
@@ -77,7 +80,7 @@ def explain_accuracy(rel_tol, CI):
     if rel_tol is None or CI is None:
         raise PreventUpdate
 
-    return 'Simulations will continue until the radius of the {}%-confidence '.format(round(CI*100, ndigits=2)) + \
+    return 'Simulations will continue until the {}%-confidence '.format(round(CI*100, ndigits=2)) + \
            'interval has a radius of less than {}% of the estimate. '.format(round(rel_tol*100, ndigits=2)) + \
            'The relative tolerance level determines to how many significant figures the results are rounded.'
 
@@ -171,16 +174,18 @@ def update_input_table(n_groups, stat_test, rows):
     State('stat_test', 'value'),
     State('alpha', 'value'),
     State('beta', 'value'),
+    State('n_groups', 'value'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'value'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'id'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'data'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'id')
 )
-def give_n(path, stat_test, alpha, beta, test_param_values, test_param_values_ids, test_param_data,
+def give_n(path, stat_test, alpha, beta, n_groups, test_param_values, test_param_values_ids, test_param_data,
            test_param_data_ids):
     if path == '/interim-analyses':
         color, message = TestObject(stat_test).fixed_sample_size(alpha, beta, test_param_values, test_param_values_ids,
-                                                                 test_param_data, test_param_data_ids)
+                                                                 test_param_data, test_param_data_ids,
+                                                                 n_groups=n_groups)
         return True, color, message
     raise PreventUpdate
 # endregion
@@ -440,17 +445,23 @@ def create_evaluation(local, memory_limit):
 @app.callback(
     Output('table', 'children'),
     Input('estimates', 'data'),
-    State('relative-tolerance', 'value'),
+    State('CI', 'value'),
     State('identify_model', 'data'))
-def print_the_table(df, relTol, model_info):
+def print_the_table(df, CI, model_info):
     """ Summarize results, round to significant digits and show on webpage."""
 
-    if df is None:
+    if df is None or CI is None:
         raise PreventUpdate
 
     estimates = pd.read_json(df[0], orient='split')
+    estimates.index = np.arange(len(estimates))
+    std_errors = pd.read_json(df[1], orient='split')
+    std_errors.index = np.arange(len(std_errors))
+    z_score = abs(norm.ppf(0.5 * (1 - CI)))
 
-    def round_to_sig(x):
+    n_analyses = int(model_info['Number of analyses'])
+
+    def round_to_sig(x, x_se):
         # NaNs and infinity cannot be rounded and cannot be shown as that
         # type in a dash.DataTable. Hence -> str
         if np.isnan(x):
@@ -462,35 +473,85 @@ def print_the_table(df, relTol, model_info):
                 return '- Inf'
         elif x == 0:
             return x
+        elif np.isnan(x_se) or x_se == 0:
+            return round(x, 9 - int(np.floor(np.log10(x))))
         else:
-            return round(x, int(-np.floor(np.log10(abs(relTol))) - (np.floor(np.log10(abs(x))))))
+            return round(x, -int(np.floor(np.log10(z_score*x_se))))
 
-    results_dict = [{col: round_to_sig(estimates[col][i]) for col in estimates.columns[:-1]} for i in estimates.index]
+    results_dict = [{col: round_to_sig(estimates[col][i], std_errors[col][i])
+                     for col in estimates.columns[:-1]} for i in estimates.index]
 
     for (i, modId) in enumerate(estimates['Model id']):
         # Add model id column to the dictionary
         results_dict[i]["Model id"] = estimates["Model id"][i]
 
-    n_analyses = int(model_info['Number of analyses'])
+    table1 = dash_table.DataTable(columns=[{'name': 'Model id', 'id': 'Model id'},
+                                           {'name': 'Power', 'id': 'Power at analysis {}'.format(n_analyses)},
+                                           {'name': 'Expected cost H0', 'id': 'Expected cost H0'},
+                                           {'name': 'Expected cost HA', 'id': 'Expected cost HA'}],
+                                  data=results_dict, editable=False, **table_style,
+                                  style_table={'overflowX': 'auto', 'maxWidth': '50rem'})
 
-    # Only show model model id, the relevant critical values, total power and projected costs
-    column_order = ['Model id']
+    rel_cols = []
 
     if model_info['Spending'] == 'alpha' or model_info['Spending'] == 'both':
         # Hide the futility bounds when only using alpha spending
-        column_order = column_order + ['Sig. bound {}'.format(i + 1) for i in range(n_analyses - 1)]
+        rel_cols = rel_cols + ['Sig. bound {}'.format(i + 1) for i in range(n_analyses - 1)]
 
-    column_order = column_order + ['Sig. bound {}'.format(n_analyses)]
+    rel_cols = rel_cols + ['Sig. bound {}'.format(n_analyses)]
 
     if model_info['Spending'] == 'beta' or model_info['Spending'] == 'both':
         # Hide the infinite significance bounds when only using beta spending
-        column_order = column_order + ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)]
+        rel_cols = rel_cols + ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)]
 
-    column_order = column_order + ['Power at analysis {}'.format(n_analyses), 'Expected cost H0', 'Expected cost HA']
-    column_names = column_order[:-3] + ['Power'] + column_order[-2:]
+    table2 = dash_table.DataTable(columns=[{"name": item, "id": item} for item in ['Model id'] + rel_cols],
+                                  data=results_dict, editable=False, **table_style,
+                                  style_table={'overflowX': 'auto', 'maxWidth': '{}rem'.format((len(rel_cols)+2) * 10)})
 
-    return dash_table.DataTable(columns=[{"name": column_names[i], "id": item} for (i, item) in enumerate(column_order)],
-                                data=results_dict, editable=False, **table_style)
+    def crit_p(x, x_se, N):
+        # NaNs and infinity cannot be rounded and cannot be shown as that
+        # type in a dash.DataTable. Hence -> str
+        if np.isnan(x):
+            return 'NaN'
+        elif np.isinf(x):
+            if x > 0:
+                return 0
+            else:
+                return 1
+        elif np.isnan(x_se) or x_se == 0:
+            p = TestObject(model_info['Test']).get_p_equivalent(x, N)
+            return round(p, 9 - int(np.floor(np.log10(p))))
+        else:
+            ps = TestObject(model_info['Test']).get_p_equivalent(x, N)
+            pll = TestObject(model_info['Test']).get_p_equivalent(x + z_score*x_se, N)
+            pul = TestObject(model_info['Test']).get_p_equivalent(x - z_score*x_se, N)
+            dif = max(pul-ps, ps-pll)
+            return round(ps, -int(np.floor(np.log10(dif))))
+
+    sample_sizes = np.asarray(model_info['Sample sizes'])
+
+    results_dict = [{col: crit_p(estimates[col][i], std_errors[col][i], sample_sizes[:, int(col[-1]) - 1])
+                    for col in rel_cols} for i in estimates.index]
+    
+    for (i, modId) in enumerate(estimates['Model id']):
+        # Add model id column to the dictionary
+        results_dict[i]["Model id"] = estimates["Model id"][i]
+
+    table3 = dash_table.DataTable(columns=[{"name": item, "id": item} for item in ['Model id'] + rel_cols],
+                                  data=results_dict, editable=False, **table_style,
+                                  style_table={'overflowX': 'auto', 'maxWidth': '{}rem'.format((len(rel_cols)+2) * 10)})
+
+    return [dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
+                            children=[table1, html.Br()])),
+            dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
+                            children=[label('Critical values for the test statistic'), html.Br(),
+                                      table2, html.Br()])),
+            dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
+                            children=[label('Critical values for the p-value'), html.Br(),
+                                      'Please keep in mind that after the first analysis the reported p-values no '
+                                      'longer match their traditional definition.',  html.Br()])),
+            dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
+                            children=[table3, html.Br()]))]
 
 
 @app.callback(Output('download', 'data'),
@@ -516,7 +577,7 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
     std_errors = pd.read_json(df[1], orient='split')
 
     newCols = ['Model id']
-    for (i, col) in enumerate(estimates.columns[1:]):
+    for (i, col) in enumerate(estimates.columns[:-1]):
         newCols = newCols + [col, 'SE {}'.format(i+1)]
         estimates['SE {}'.format(i+1)] = std_errors[col]
 

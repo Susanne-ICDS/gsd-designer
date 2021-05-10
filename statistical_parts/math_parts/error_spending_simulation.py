@@ -85,6 +85,9 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
             power[i, :, r] = np.sum(sigs)
             true_negatives[i, :, r] = np.sum(futs)
 
+            if sig_bounds[i, 0, r] <= fut_bounds[i, 0, r] + 10**-15:
+                fut_bounds[i, 0, r] = sig_bounds[i, 0, r]
+
             undecided_h0 = np.logical_and(sig_bounds[i, 0, r] > T0[0, :], np.logical_not(futs))
             undecided_ha = np.logical_and(np.logical_not(sigs), fut_bounds[i, 0, r] < TA[0, :])
             # Record at which analysis each simulation reached significance or was found futile
@@ -96,10 +99,9 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
                 left_h0 = np.sum(undecided_h0)
                 left_ha = np.sum(undecided_ha)
 
-                if sig_bounds[i, j - 1, r] <= fut_bounds[i, j - 1, r]:
+                if sig_bounds[i, j - 1, r] <= fut_bounds[i, j - 1, r] + 10**-15:
                     # Set-up over-powered before last analysis
                     # The futility bound of the previous analysis was larger than the significance bound
-                    fut_bounds[i, j - 1, r] = sig_bounds[i, j - 1, r]
                     sig_bounds[i, j:, r] = np.nan
                     fut_bounds[i, j:, r] = np.nan
                     break
@@ -141,10 +143,12 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
                     break
 
                 elif betas[i, j] - betas[i, j - 1] > 10**-15:
-                    fut_bounds[i, j] = np.quantile(TA[j, undecided_ha],
+                    fut_bounds[i, j, r] = np.quantile(TA[j, undecided_ha],
                                                    (betas[i, j] - betas[i, j - 1]) * n_simulations / left_ha)
+                    if fut_bounds[i, j, r] >= sig_bounds[i, j, r]:
+                        fut_bounds[i, j, r] = sig_bounds[i, j, r]
                 else:
-                    fut_bounds[i, j] = - np.inf
+                    fut_bounds[i, j, r] = - np.inf
 
                 # Add the number of times stopped for significance under HA and for futility under H0
                 power[i, j:, r] = np.sum(sig_bounds[i, j, r] <= TA[j, undecided_ha]) + power[i, j:, r]
@@ -200,7 +204,7 @@ def simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names,
 
     def label(included_models):
         """ Create labels to match above transformation. """
-        return np.repeat(model_ids[included_models], n_repeats)[:, np.newaxis]
+        return np.repeat(np.arange(0, n_models)[included_models], n_repeats)[:, np.newaxis]
 
     while np.any(sims_needed):
         sig_bounds, fut_bounds, mean_cost_h0, mean_cost_ha, power, true_negatives = \

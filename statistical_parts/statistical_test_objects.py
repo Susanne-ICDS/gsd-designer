@@ -267,6 +267,10 @@ class TTest(BasicTest):
 
         return t_test_functions.give_exact(sample_sizes, alphas, betas, **test_parameters)
 
+    @staticmethod
+    def get_p_equivalent(x, N):
+        return t_test_functions.get_p_equivalent(x, N)
+
 
 class OneWay(BasicTest):
     """ Test object for the one-way ANOVA. """
@@ -334,6 +338,20 @@ class OneWay(BasicTest):
 
         return False, test_parameters
 
+    def fixed_sample_size(self, alpha, beta, test_param_values, test_param_values_ids, test_param_data,
+                          test_param_data_ids, **kwargs):
+        problem, test_parameters = self.check_input(test_param_values, test_param_values_ids, test_param_data,
+                                                    test_param_data_ids, **kwargs)
+
+        if problem:
+            return 'warning', test_parameters
+
+        n, typeII = one_way_functions.give_fixed_sample_size(test_parameters['means'], test_parameters['sd'],
+                                                             alpha, beta)
+
+        return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
+
+
     @staticmethod
     def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
         """ Simulate the test statistics """
@@ -348,4 +366,8 @@ class OneWay(BasicTest):
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):
         return one_way_functions.give_exact(sample_sizes, alphas, betas, **test_parameters)
+
+    @staticmethod
+    def get_p_equivalent(x, N):
+        return one_way_functions.get_p_equivalent(x, N)
 # end region

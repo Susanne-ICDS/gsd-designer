@@ -24,13 +24,14 @@ layout = html.Div([
                         dbc.Button('Evaluate', id='button', color='primary')
                         ])),
     html.Br(),
-    dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': 'auto'},
-                    children=[
-                        # A little loading GIF is shown as long as the simulations are running.
-                        dcc.Loading(id="loadingItem", type="default",
-                                    children=[
-                                        dbc.Alert(id="status", dismissable=True, is_open=False),
-                                        html.Div(id='table')])])),
+
+    # A little loading GIF is shown as long as the simulations are running.
+    dcc.Loading(id="loadingItem", type="default",
+                children=[dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': 'auto'},
+                                          children=[dbc.Alert(id="status", dismissable=True, is_open=False)])),
+                          html.Div(id='table', children=[
+                              dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': 'auto'},
+                                              children=['No previous simulations']))])]),
 
     # The simulation results are shown in the div 'table'
     # The 'status' div is used to either invite the user to push the button,
@@ -38,16 +39,6 @@ layout = html.Div([
     # or show error messages in case of dumb user input.
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                     children=[
-                        html.Br(),
-                        label('Download a more detailed report'), html.Br(),
-                        regular_text('The csv file contains the unrounded estimates of the values above plus a few '
-                                     'more, and each of their standard errors. The excel file has a tab with the same'
-                                     'information as the csv file and an additional tab showing your design input.'
-                                     ),
-                        html.Br(),
-                        dbc.Button('Download CSV', id='csv_button', color='primary', outline=True),
-                        dbc.Button('Download excel', id='excel_button', color='primary', outline=True),
-                        html.Br(),
                         html.Br(),
                         label('Relative tolerance and confidence level'),
                         html.Div(id='explain-accuracy'),
@@ -63,5 +54,17 @@ layout = html.Div([
                          dbc.Input(id='CI', placeholder='Confidence level', type='number', value=0.95, min=0, max=1,
                                    step=10**-4)
                      ])]),
+    dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
+                    children=[
+                        html.Br(),
+                        label('Download a more detailed report'), html.Br(),
+                        regular_text('The csv file contains the unrounded estimates of the values above plus a few '
+                                     'more, and each of their standard errors. The excel file has a tab with the same'
+                                     'information as the csv file and an additional tab showing your design input.'
+                                     ),
+                        html.Br(),
+                        dbc.Button('Download CSV', id='csv_button', color='primary', outline=True),
+                        dbc.Button('Download excel', id='excel_button', color='primary', outline=True),
+                        html.Br(),])),
     Download(id="download")
 ])
