@@ -51,7 +51,7 @@ app.layout = html.Div([navbar.bar, dbc.Container([
                                html.Br(), html.A('icds.be', href='https://icds.be', style={'color': '#fff'})
                                ],
                      style={'textAlign': 'center'}),
-             dbc.Col(lg=3, md={'size': 5, 'offset': spacing['offset']}, sm=7,
+             dbc.Col(lg={'size': 3, 'offset': 0}, md={'size': 5, 'offset': spacing['offset']}, sm=7,
                      children=[html.Br(),
                                'Code and documentation: ',
                                html.A('Github', href='https://github.com/Susanne-ICDS/gsd-designer',
@@ -61,7 +61,7 @@ app.layout = html.Div([navbar.bar, dbc.Container([
                                html.Br(), html.Br(),
                                'Tutorial: Coming soon'
                                ]),
-             dbc.Col(lg=3, md=6, sm=7,
+             dbc.Col(lg=3, md=5, sm=7,
                      children=[html.Br(),
                                'App developed by: Susanne Blotwijk', html.Br(),
                                html.Br(), 'Version: ' + version, html.Br(),
