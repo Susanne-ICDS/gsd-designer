@@ -49,7 +49,7 @@ def simulate_statistics(n_simulations, sample_sizes, memory_limit, means, sd):
         grand_mean = np.sum(group_mean * sample_sizes[:, :, np.newaxis], axis=0) / \
             total_sample_sizes[:, np.newaxis]
 
-        between_group_var = np.sum(total_sample_sizes[np.newaxis, :, np.newaxis] *
+        between_group_var = np.sum(sample_sizes[:, :, np.newaxis] *
                                    (group_mean - grand_mean[np.newaxis, :, :]) ** 2, axis=0) / (n_groups - 1)
 
         del grand_mean, group_mean
