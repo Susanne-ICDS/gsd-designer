@@ -242,68 +242,8 @@ def simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names,
 
         sims_needed[order] = too_big
 
-    estimates['Model id'] = np.sort(model_ids)
-    std_errors['Model id'] = np.sort(model_ids)
-    counts['Model id'] = np.sort(model_ids)
+    estimates['Model id'] = model_ids
+    std_errors['Model id'] = model_ids
+    counts['Model id'] = model_ids
 
     return estimates, std_errors, n_simulations, counts
-
-
-def simulation_loop2(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, model_ids, default_n_repeats,
-                     max_n_repeats, simulator_h0, simulator_ha, costs, exact_true_neg=None, exact_power=None,
-                     max_iter=10**3):
-    """ Simulate estimates for the properties for the GSDs until the desired relative tolerance level
-    for the error confidence interval has been reached."""
-
-    n_simulations = get_sim_nr(alphas, betas, rel_tol)
-    n_models = alphas.shape[0]
-    n_analyses = alphas.shape[1]
-    n_repeats = default_n_repeats
-
-    # Initially all models require simulations -> sims_needed all True
-    sims_needed = np.ones(n_models, dtype='?')
-    count = 0
-    model_ids = np.asarray(model_ids)
-
-    simulations = np.zeros((n_models, 4 * n_analyses + 2, 0))
-
-    for _ in range(max_iter):
-        sig_bounds, fut_bounds, mean_cost_h0, mean_cost_ha, power, true_negatives = \
-            simulate_empirical_bounds(alphas[sims_needed, :], betas[sims_needed, :], exact_sig[sims_needed],
-                                      exact_fut[sims_needed], simulator_h0, simulator_ha, costs, n_simulations,
-                                      n_repeats, exact_true_neg, exact_power)
-
-        add_this = np.nan + np.zeros((n_models, 4 * n_analyses + 2, n_repeats))
-        add_this[sims_needed] = np.concatenate((sig_bounds, fut_bounds, mean_cost_h0[:, np.newaxis, :],
-                                                mean_cost_ha[:, np.newaxis, :], power, true_negatives), axis=1)
-        simulations = np.concatenate((simulations, add_this), axis=2)
-        count = count + n_repeats
-
-        estimates = np.mean(simulations[sims_needed, :, :], axis=2)
-        sds = np.std(simulations[sims_needed, :, :], axis=2)
-        # Z-score * SE = length of the CI
-        rel_error = (abs(norm.ppf(0.5 * (1 - CI))) * sds / (count ** 0.5) / estimates).max(axis=1)
-        ratio = np.asarray(rel_error / rel_tol)
-        too_big = ratio > 1
-        sims_needed[sims_needed] = too_big
-
-        # Estimate remaining required simulations to use for next iteration
-        # Minimum and maximum added simulations per iteration: _default_n_repeats and _max_n_repeats
-        if np.any(too_big):
-            n_repeats = int(np.min(np.ceil(count[sims_needed] * ratio[too_big] ** 2 - count[sims_needed])))
-            n_repeats = min(max_n_repeats, max(default_n_repeats, n_repeats))
-        else:
-            break
-
-    simulations = simulations.transpose((0, 2, 1)).reshape(n_models * count, 4 * n_analyses + 2)
-    redundant_rows = np.all(np.isnan(simulations), axis=1)
-    # Add model ids
-    simulations = np.append(np.repeat(model_ids, count)[:, np.newaxis], simulations, axis=1)
-    simulations = simulations[np.logical_not(redundant_rows), :]
-
-    sims_df = pd.DataFrame(simulations, columns=col_names)
-    counts = sims_df.groupby('Model id', as_index=True).count()
-    estimates = sims_df.groupby('Model id', as_index=True).mean()
-    std_errors = sims_df.groupby('Model id', as_index=True).std() / (counts ** 0.5)
-
-    return estimates, std_errors, n_simulations, count
