@@ -9,6 +9,7 @@ venv
 .DS_Store
 .env
 .dat
+.yaml
 
 test_and_timer.py
 test_code.py
