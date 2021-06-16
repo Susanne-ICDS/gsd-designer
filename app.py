@@ -25,7 +25,7 @@ dash_app.index_string = """
     <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-analytics.js"></script>
     <script src="/__/firebase/8.6.1/firebase-performance.js"></script>
 
-    <script src="firebase_script.js></script>
+    <script src="firebase_script.js"></script>
     
     {%app_entry%}
     <footer>
