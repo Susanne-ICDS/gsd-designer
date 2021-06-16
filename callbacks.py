@@ -11,7 +11,7 @@ import numpy as np
 from scipy.stats import norm
 import xlsxwriter
 
-from app import app
+from app import dash_app
 
 from statistical_parts.statistical_test_objects import TestObject
 from statistical_parts.error_spending import check_form_error_spent
@@ -24,7 +24,7 @@ _default_n_repeats = 10
 _max_n_repeats = 10 ** 6
 
 
-@app.callback(
+@dash_app.callback(
     Output('basic-design', 'hidden'),
     Output('interim-analyses', 'hidden'),
     Output('error-spending', 'hidden'),
@@ -59,23 +59,23 @@ def navigation(path):
         first, last, previous_tab, next_tab
 
 
-@app.callback(
+@dash_app.callback(
     Output('test_input_tab1', 'children'),
     Input('stat_test', 'value'))
 def display_tab1(stat_test):
     return TestObject(stat_test).tab_basic_design()
 
 
-@app.callback(
+@dash_app.callback(
     Output('test_input_tab2', 'children'),
     Input('stat_test', 'value'))
 def display_tab2(stat_test):
     return TestObject(stat_test).tab_interim_analyses()
 
 
-@app.callback(Output('explain-accuracy', 'children'),
-              Input('relative-tolerance', 'value'),
-              Input('CI', 'value'))
+@dash_app.callback(Output('explain-accuracy', 'children'),
+                   Input('relative-tolerance', 'value'),
+                   Input('CI', 'value'))
 def explain_accuracy(rel_tol, CI):
     if rel_tol is None or CI is None:
         raise PreventUpdate
@@ -86,7 +86,7 @@ def explain_accuracy(rel_tol, CI):
 
 
 # region test input
-@app.callback(
+@dash_app.callback(
     Output('costs', 'style_data'),
     Output('costs', 'style_header'),
     Output('costs', 'editable'),
@@ -98,7 +98,7 @@ def disable_costs(checked):
         return table_style['style_data'], table_style['style_header'], True
 
 
-@app.callback(
+@dash_app.callback(
     Output('costs', 'columns'),
     Output('costs', 'data'),
     Input('cost-default', 'value'),
@@ -126,7 +126,7 @@ def change_costs(checked, sample_sizes, n_analyses, n_groups, stat_test):
         return cols, dash.no_update
 
 
-@app.callback(
+@dash_app.callback(
     Output('sample_sizes', 'columns'),
     Input('n_analyses', 'value'))
 def resize_columns(n_analyses):
@@ -138,7 +138,7 @@ def resize_columns(n_analyses):
             for i in range(n_analyses)]
 
 
-@app.callback(
+@dash_app.callback(
     Output('sample_sizes', 'data'),
     Input('n_groups', 'value'),
     State('sample_sizes', 'data'),
@@ -152,7 +152,7 @@ def resize_rows(n_groups, rows, stat_test):
         return TestObject(stat_test).resize_rows(n_groups, rows)
 
 
-@app.callback(
+@dash_app.callback(
     Output({'type': 'test parameter', 'name': MATCH, 'form': 'datatable'}, 'data'),
     Input('n_groups', 'value'),
     State('stat_test', 'value'),
@@ -166,7 +166,7 @@ def update_input_table(n_groups, stat_test, rows):
     raise PreventUpdate
 
 
-@app.callback(
+@dash_app.callback(
     Output('fixed-n', 'is_open'),
     Output('fixed-n', 'color'),
     Output('fixed-n', 'children'),
@@ -192,7 +192,7 @@ def give_n(path, stat_test, alpha, beta, n_groups, test_param_values, test_param
 
 
 # region error-spending input
-@app.callback(
+@dash_app.callback(
     Output('IR', 'hidden'),
     Output('DES', 'hidden'),
     Input('error_type', 'value'))
@@ -202,7 +202,7 @@ def switch_type(error_type):
     return 'IR' != error_type, 'DES' != error_type
 
 
-@app.callback(
+@dash_app.callback(
     Output('information-ratio-table', 'style_data'),
     Output('information-ratio-table', 'style_header'),
     Output('information-ratio-table', 'editable'),
@@ -216,7 +216,7 @@ def make_editable(checked):
         return table_style['style_data'], table_style['style_header'], True
 
 
-@app.callback(
+@dash_app.callback(
     Output('information-ratio-table', 'columns'),
     Output('information-ratio-table', 'data'),
     Input('ir-default', 'value'),
@@ -244,7 +244,7 @@ def change_IR(checked, sample_sizes, n_analyses, n_groups, stat_test):
         return cols, dash.no_update
 
 
-@app.callback(
+@dash_app.callback(
     Output('error-spending-table', 'columns'),
     Input('n_analyses', 'value'),
     Input('spending', 'value'))
@@ -269,7 +269,7 @@ def resize_table(n_analyses, spending):
         return betas
 
 
-@app.callback(
+@dash_app.callback(
     Output('error-spending-table', 'data'),
     Input('adding-rows-button', 'n_clicks'),
     Input('n_analyses', 'value'),
@@ -305,7 +305,7 @@ def add_row(n_clicks, n_analyses, rows, columns):
 
 
 def create_evaluation(local, memory_limit):
-    @app.callback(
+    @dash_app.callback(
         Output('status', 'children'),
         Output('status', 'color'),
         Output('status', 'is_open'),
@@ -442,7 +442,7 @@ def create_evaluation(local, memory_limit):
             'success', True, identify_model, [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
 
 
-@app.callback(
+@dash_app.callback(
     Output('table', 'children'),
     Input('estimates', 'data'),
     State('CI', 'value'),
@@ -554,11 +554,11 @@ def print_the_table(df, CI, model_info):
                             children=[table3, html.Br()]))]
 
 
-@app.callback(Output('download', 'data'),
-              Input('csv_button', 'n_clicks'),
-              Input('excel_button', 'n_clicks'),
-              State('identify_model', 'data'),
-              State('estimates', 'data'))
+@dash_app.callback(Output('download', 'data'),
+                   Input('csv_button', 'n_clicks'),
+                   Input('excel_button', 'n_clicks'),
+                   State('identify_model', 'data'),
+                   State('estimates', 'data'))
 def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
     """ Return the file containing the estimates based on the simulation
     + the corresponding standard errors.
@@ -570,6 +570,9 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
     ctx = dash.callback_context
 
     if not ctx.triggered:
+        raise PreventUpdate
+
+    if df is None:
         raise PreventUpdate
 
     # Read simulations, calculate estimates and standard errors.
