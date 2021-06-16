@@ -10,6 +10,7 @@ venv
 .env
 .dat
 
+firebase_script.js
 test_and_timer.py
 test_code.py
 memprof.bat

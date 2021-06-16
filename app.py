@@ -25,22 +25,8 @@ dash_app.index_string = """
     <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-analytics.js"></script>
     <script src="/__/firebase/8.6.1/firebase-performance.js"></script>
 
-    <script>
-      // Your web app's Firebase configuration
-      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-      var firebaseConfig = {
-        apiKey: "AIzaSyDI-7W4G6OBk1e34TAQsnhDvmPQ5XbAQBo",
-        authDomain: "gsdesigner-81c5e.firebaseapp.com",
-        projectId: "gsdesigner-81c5e",
-        storageBucket: "gsdesigner-81c5e.appspot.com",
-        messagingSenderId: "53303168086",
-        appId: "1:53303168086:web:dcb1085c9a9674a5fbfff7",
-        measurementId: "G-10V9R0CZE4"
-      };
-      // Initialize Firebase
-      firebase.initializeApp(firebaseConfig);
-      firebase.analytics();
-    </script>
+    <script src="firebase_script.js></script>
+    
     {%app_entry%}
     <footer>
         {%config%}
