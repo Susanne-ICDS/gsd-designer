@@ -9,7 +9,7 @@ venv
 .DS_Store
 .env
 .dat
-.yaml
+*.yaml
 
 firebase_script.js
 app.py
