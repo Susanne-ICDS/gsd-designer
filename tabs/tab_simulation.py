@@ -58,9 +58,11 @@ layout = html.Div([
                     children=[
                         html.Br(),
                         label('Download a more detailed report'), html.Br(),
-                        regular_text('The csv file contains the unrounded estimates of the values above plus a few '
-                                     'more, and each of their standard errors. The excel file has a tab with the same'
-                                     'information as the csv file and an additional tab showing your design input.'
+                        regular_text('The csv file contains the non-rounded estimates of the simulated values and each '
+                                     'of their standard errors. The excel file is a bit more elaborate. The first tab '
+                                     'shows your design input, the second tab has the same information as the csv file,'
+                                     ' and the third tab shows the p-values corresponding to the simulated test'
+                                     ' statistics and their 95% confidence intervals.'
                                      ),
                         html.Br(),
                         dbc.Button('Download CSV', id='csv_button', color='primary', outline=True),

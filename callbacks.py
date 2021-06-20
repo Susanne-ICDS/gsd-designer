@@ -397,7 +397,7 @@ def create_evaluation(local, memory_limit):
         error_spending_param = message[2]
 
         problem, message = TestObject(stat_test).check_input(test_param_values, test_param_values_ids, test_param_data,
-                                                         test_param_data_ids, n_groups=n_groups)
+                                                             test_param_data_ids, n_groups=n_groups)
         if problem:
             return message, error_color, True, dash.no_update, dash.no_update
         else:
@@ -459,6 +459,10 @@ def print_the_table(df, CI, model_info):
     std_errors.index = np.arange(len(std_errors))
     z_score = abs(norm.ppf(0.5 * (1 - CI)))
 
+    sides = 1
+    if 'sides' in model_info.keys() and model_info['sides'] == 'two':
+        sides = 2
+
     n_analyses = int(model_info['Number of analyses'])
 
     def round_to_sig(x, x_se):
@@ -519,12 +523,12 @@ def print_the_table(df, CI, model_info):
             else:
                 return 1
         elif np.isnan(x_se) or x_se == 0:
-            p = TestObject(model_info['Test']).get_p_equivalent(x, N)
+            p = sides * TestObject(model_info['Test']).get_p_equivalent(x, N)
             return round(p, 9 - int(np.floor(np.log10(p))))
         else:
-            ps = TestObject(model_info['Test']).get_p_equivalent(x, N)
-            pll = TestObject(model_info['Test']).get_p_equivalent(x + z_score*x_se, N)
-            pul = TestObject(model_info['Test']).get_p_equivalent(x - z_score*x_se, N)
+            ps = sides * TestObject(model_info['Test']).get_p_equivalent(x, N)
+            pll = sides * TestObject(model_info['Test']).get_p_equivalent(x + z_score*x_se, N)
+            pul = sides * TestObject(model_info['Test']).get_p_equivalent(x - z_score*x_se, N)
             dif = max(pul-ps, ps-pll)
             return round(ps, -int(np.floor(np.log10(dif))))
 
@@ -589,6 +593,42 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
     if np.any([item["prop_id"] == 'csv_button.n_clicks' for item in ctx.triggered]):
         return send_data_frame(estimates.to_csv, filename="your_design.csv")
 
+    # Create the estimates and confidence intervals for the p-values
+    sides = 1
+    if 'sides' in identify_model.keys() and identify_model['sides'] == 'two':
+        sides = 2
+
+    n_analyses = int(identify_model['Number of analyses'])
+
+    p_cols = ['Sig. bound {}'.format(i + 1) for i in range(n_analyses)] + \
+             ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)]
+
+    def crit_p(x, x_se, N, col_name):
+        # NaNs and infinity cannot be rounded and cannot be shown as that
+        # type in a dash.DataTable. Hence -> str
+        if np.isnan(x):
+            return {col_name: 'NaN', '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
+        elif np.isinf(x):
+            if x > 0:
+                return {col_name: 0, '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
+            else:
+                return {col_name: 1, '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
+        else:
+            return {col_name: sides * TestObject(identify_model['Test']).get_p_equivalent(x, N),
+                    '95%CI lower' + col_name:
+                        sides * TestObject(identify_model['Test']).get_p_equivalent(x+norm.ppf(0.975) * x_se, N),
+                    '95%CI upper' + col_name:
+                        sides * TestObject(identify_model['Test']).get_p_equivalent(x-norm.ppf(0.975) * x_se, N)}
+
+    sample_sizes = np.asarray(identify_model['Sample sizes'])
+
+    p_dicts = [{'Model id': identify_model['Model id'][i]} for i in estimates.index]
+
+    [p_dict.update(crit_p(estimates[col][i], std_errors[col][i], sample_sizes[:, int(col[-1]) - 1], col))
+     for col in p_cols for (i, p_dict) in enumerate(p_dicts)]
+
+    # Create excel file if button clicked
+
     if np.any([item["prop_id"] == 'excel_button.n_clicks' for item in ctx.triggered]):
         model_specs = pd.DataFrame()
         for key in identify_model:
@@ -606,6 +646,7 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
             writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
             model_specs.to_excel(writer, index=False, sheet_name='Design input')
             estimates.to_excel(writer, index=False, sheet_name='Estimates')
+            pd.DataFrame(p_dicts).to_excel(writer, index=False, sheet_name='P-value estimates')
             writer.save()
 
         return send_bytes(to_xlsx, "your_design.xlsx")
