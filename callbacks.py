@@ -437,7 +437,11 @@ def create_evaluation(local, memory_limit):
         std_errors = std_errors.astype(str)
         # The string type-casting is because json serialization does not support infinite values
 
-        return [html.B('Simulations finished: '), 'Results based on {} estimates'.format(np.asarray(counts[col_names[1]])) +
+        counts_str = '{}'.format(counts[col_names[1]][0])
+        for i in range(counts.shape[0] - 1):
+            counts_str += ', ' + '{}'.format(counts[col_names[1]][i])
+
+        return [html.B('Simulations finished: '), 'Results per model based on respectively' + counts_str + 'estimates' +
                                                   ' with {} simulations each'.format(n_simulations)], \
             'success', True, identify_model, [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
 
@@ -478,7 +482,7 @@ def print_the_table(df, CI, model_info):
         elif x == 0:
             return x
         elif np.isnan(x_se) or x_se == 0:
-            return round(x, 9 - int(np.floor(np.log10(x))))
+            return round(x, 9 - int(np.floor(np.log10(np.abs(x)))))
         else:
             return round(x, -int(np.floor(np.log10(z_score*x_se))))
 
@@ -615,9 +619,9 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
                 return {col_name: 1, '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
         else:
             return {col_name: sides * TestObject(identify_model['Test']).get_p_equivalent(x, N),
-                    '95%CI lower' + col_name:
+                    '95%CI (lower):' + col_name:
                         sides * TestObject(identify_model['Test']).get_p_equivalent(x+norm.ppf(0.975) * x_se, N),
-                    '95%CI upper' + col_name:
+                    '95%CI (upper):' + col_name:
                         sides * TestObject(identify_model['Test']).get_p_equivalent(x-norm.ppf(0.975) * x_se, N)}
 
     sample_sizes = np.asarray(identify_model['Sample sizes'])

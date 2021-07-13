@@ -15,7 +15,7 @@ from layout_instructions import spacing_variables as spacing
 app = server
 
 BISI_LOGO = '/assets/Logos.svg'
-version = '0.2.' + str(int(open("version.txt", "r").read()))
+version = '0.3.' + str(int(open("version.txt", "r").read()))
 local = False
 memory_limit = 1 - 0.25  # in GigaByte
 callbacks.create_evaluation(local, memory_limit)
@@ -62,10 +62,13 @@ dash_app.layout = html.Div(children=[navbar.bar, dbc.Container([
                                'Code and documentation: ',
                                html.A('Github', href='https://github.com/Susanne-ICDS/gsd-designer',
                                       style={'color': '#fff', 'text-decoration': 'underline'}),
+                               # html.Br(), html.Br(),
+                               # 'Citable publication: Coming soon',
                                html.Br(), html.Br(),
-                               'Citable publication: Coming soon',
-                               html.Br(), html.Br(),
-                               'Tutorial: Coming soon'
+                               'Tutorial: ',
+                               html.A('Download',
+                                      href='https://github.com/ICDS-VubUZ/gsd-designer/raw/main/S2_Tutorial.pdf',
+                                      style={'color': '#fff', 'text-decoration': 'underline'})
                                ]),
              dbc.Col(lg=3, md=5, sm=7,
                      children=[html.Br(),
