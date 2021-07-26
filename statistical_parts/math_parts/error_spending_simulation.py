@@ -29,7 +29,7 @@ def get_sim_nr(alphas, betas, rel_tolerance):
 
 def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0, simulator_ha, costs,
                               n_simulations: int, n_repeats: int, exact_true_neg=None, exact_power=None):
-    """  Simulate the properties of the specified group sequential design.
+    """  Simulate the bounds and properties of the specified group sequential design.
 
     :param alphas: (n_models x n_analyses) array-like with the type I error spent per analysis for each GSD
     :param betas: (n_models x n_analyses) array-like with the type II error spent per analysis for each GSD
@@ -79,17 +79,14 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
         TA = simulator_ha(n_simulations)
 
         for i in range(n_models):
-            sigs = sig_bounds[i, 0, r] <= TA[0, :]
-            futs = fut_bounds[i, 0, r] >= T0[0, :]
-
-            power[i, :, r] = np.sum(sigs)
-            true_negatives[i, :, r] = np.sum(futs)
+            power[i, :, r] = np.sum(sig_bounds[i, 0, r] <= TA[0, :])
+            true_negatives[i, :, r] = np.sum(fut_bounds[i, 0, r] >= T0[0, :])
 
             if sig_bounds[i, 0, r] <= fut_bounds[i, 0, r] + 10**-15:
                 fut_bounds[i, 0, r] = sig_bounds[i, 0, r]
 
-            undecided_h0 = np.logical_and(sig_bounds[i, 0, r] > T0[0, :], np.logical_not(futs))
-            undecided_ha = np.logical_and(np.logical_not(sigs), fut_bounds[i, 0, r] < TA[0, :])
+            undecided_h0 = np.logical_and(sig_bounds[i, 0, r] > T0[0, :], fut_bounds[i, 0, r] < T0[0, :])
+            undecided_ha = np.logical_and(sig_bounds[i, 0, r] > TA[0, :], fut_bounds[i, 0, r] < TA[0, :])
             # Record at which analysis each simulation reached significance or was found futile
             stop_at_h0 = np.zeros(n_simulations, dtype=int)
             stop_at_ha = np.zeros(n_simulations, dtype=int)
@@ -135,8 +132,8 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
                     # set-up overpowered before final analyses, all remaining simulations are futile,
                     fut_bounds[i, j, r] = sig_bounds[i, j, r]
 
-                    power[i, j:, r] = np.sum(sig_bounds[i, j, r] <= TA[j, undecided_ha]) + power[i, j:, r]
-                    true_negatives[i, j:, r] = np.sum(fut_bounds[i, j] >= T0[j, undecided_h0]) + true_negatives[i, j:]
+                    power[i, j:, r] += np.sum(sig_bounds[i, j, r] <= TA[j, undecided_ha])
+                    true_negatives[i, j:, r] += np.sum(fut_bounds[i, j, r] >= T0[j, undecided_h0])
 
                     sig_bounds[i, j:] = np.nan
                     fut_bounds[i, j:] = np.nan
@@ -151,13 +148,13 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
                     fut_bounds[i, j, r] = - np.inf
 
                 # Add the number of times stopped for significance under HA and for futility under H0
-                power[i, j:, r] = np.sum(sig_bounds[i, j, r] <= TA[j, undecided_ha]) + power[i, j:, r]
-                true_negatives[i, j:, r] = np.sum(fut_bounds[i, j, r] >= T0[j, undecided_h0]) + true_negatives[i, j:, r]
+                power[i, j:, r] += np.sum(sig_bounds[i, j, r] <= TA[j, undecided_ha])
+                true_negatives[i, j:, r] += np.sum(fut_bounds[i, j, r] >= T0[j, undecided_h0])
 
-                undecided_h0 = np.logical_and(sig_bounds[i, j, r] > T0[j, :],
-                                              fut_bounds[i, j, r] < T0[j, :], undecided_h0)
-                undecided_ha = np.logical_and(sig_bounds[i, j, r] > TA[j, :],
-                                              fut_bounds[i, j, r] < TA[j, :], undecided_ha)
+                undecided_h0 = np.logical_and(np.logical_and(sig_bounds[i, j, r] > T0[j, :],
+                                                             fut_bounds[i, j, r] < T0[j, :]), undecided_h0)
+                undecided_ha = np.logical_and(np.logical_and(sig_bounds[i, j, r] > TA[j, :],
+                                                             fut_bounds[i, j, r] < TA[j, :]), undecided_ha)
 
             mean_cost_h0[i, r] = np.nanmean(costs[stop_at_h0])
             mean_cost_ha[i, r] = np.nanmean(costs[stop_at_ha])
@@ -191,9 +188,6 @@ def simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names,
     estimates = pd.DataFrame(columns=col_names)
     std_errors = pd.DataFrame(columns=col_names)
 
-    # The 'group by' action orders models alphabetically,
-    # The below index is used to make sure the correct models are identified as needing more simulations
-    order = np.argsort(model_ids)
     model_ids = np.asarray(model_ids)
 
     def transform(self, n_reps, n_mods):
@@ -231,19 +225,208 @@ def simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names,
         # Z-score * SE = length of the CI
         rel_error = (abs(norm.ppf(0.5 * (1 - CI))) * std_errors / estimates).max(axis=1)
         ratio = np.asarray(rel_error / rel_tol)
-        too_big = ratio > 1
+        sims_needed = ratio > 1
 
         # Estimate remaining required simulations to use for next iteration
         # Minimum and maximum added simulations per iteration: _default_n_repeats and _max_n_repeats
-        if np.any(too_big):
-            count = (np.asarray(counts[too_big])[0, 0])
-            n_repeats = int(np.min(np.ceil(count * ratio[too_big] ** 2 - count)))
+        if np.any(sims_needed):
+            count = (np.asarray(counts[sims_needed])[0, 0])
+            n_repeats = int(np.min(np.ceil(count * ratio[sims_needed] ** 2 - count)))
             n_repeats = min(max_n_repeats, max(default_n_repeats, n_repeats))
-
-        sims_needed[order] = too_big
 
     estimates['Model id'] = model_ids
     std_errors['Model id'] = model_ids
     counts['Model id'] = model_ids
 
     return estimates, std_errors, n_simulations, counts
+
+
+def simulate_bound_properties(sig_bounds, fut_bounds, simulator, costs, n_simulations: int, n_repeats: int,
+                              exact_fut_prop=None, exact_sig_prop=None):
+    """  Simulate the properties of the specified group sequential design with given bounds.
+
+    :param sig_bounds: (n_models x n_analyses) array-like with the critical values for significance for each GSD
+    :param fut_bounds: (n_models x n_analyses) array-like with the critical values for futility for each GSD
+
+    :param simulator: function(n: int) simulates n test statistics under a chosen hypothesis
+
+    :param costs: (n_models x n_analyses) array-like with the costs per analysis for each GSD
+    :param n_simulations: number of simulations for a single set of estimates
+    :param n_repeats: number of estimates, number of times the simulation process is repeated
+
+    :param exact_fut_prop: the exact probability of a true negative at the first analysis for each GSD
+    :param exact_sig_prop: (n_models) array-like with the exact power at the first analysis for each GSD
+
+    :return: numpy arrays with the estimates per repeat,
+    either (n_models x n_repeats) or (n_models x n_analyses x n_repeats),
+    mean_cost, proportion_sig, proportion_fut
+
+    """
+
+    n_models = sig_bounds.shape[0]
+    n_analyses = sig_bounds.shape[1]
+
+    costs = np.asarray(costs)
+    costs = costs.reshape(n_analyses)
+    mean_cost = np.zeros([n_models, n_repeats])
+
+    proportion_sig = np.zeros([n_models, n_analyses, n_repeats])
+    proportion_fut = np.zeros([n_models, n_analyses, n_repeats])
+
+    for r in range(n_repeats):
+        Ts = simulator(n_simulations)
+
+        for i in range(n_models):
+            # Record at which analysis each simulation reached significance or was found futile
+            stop_at = -np.ones(n_simulations, dtype=int)
+            undecided = np.ones(n_simulations, dtype=bool)
+
+            for j in np.arange(0, n_analyses, 1):
+                # Number of undecided (not significant, not futile) simulations left
+                left = n_simulations - proportion_sig[i, j, r] - proportion_fut[i, j, r]
+
+                if left == 0:
+                    # Decision made for each simulation
+                    break
+
+                # The counter goes up by one for the simulations that did not cross the critical values in the
+                # previous analyses
+                stop_at = stop_at + undecided
+
+                proportion_sig[i, j:, r] += np.sum(sig_bounds[i, j] <= Ts[j, undecided])
+                proportion_fut[i, j:, r] += np.sum(fut_bounds[i, j] >= Ts[j, undecided])
+
+                undecided = np.logical_and(np.logical_and(sig_bounds[i, j] > Ts[j, :], fut_bounds[i, j] < Ts[j, :]),
+                                           undecided)
+
+            mean_cost[i, r] = np.nanmean(costs[stop_at])
+
+    proportion_sig = proportion_sig / n_simulations
+    proportion_fut = proportion_fut / n_simulations
+
+    if exact_fut_prop is not None:
+        proportion_fut[:, 0, :] = exact_fut_prop[:, np.newaxis]
+    if exact_sig_prop is not None:
+        proportion_sig[:, 0, :] = exact_sig_prop[:, np.newaxis]
+
+    return mean_cost, proportion_sig, proportion_fut
+
+
+def simulate_prop_loop(sig_bounds, fut_bounds, rel_tol, CI, col_names, model_ids, default_n_repeats, max_n_repeats,
+                       simulator, costs, exact_fut_prop=None, exact_sig_prop=None, n_simulations=10 ** 6):
+    sig_bounds = np.asarray(sig_bounds)
+    fut_bounds = np.asarray(fut_bounds)
+
+    n_models = sig_bounds.shape[0]
+    n_analyses = sig_bounds.shape[1]
+    n_repeats = default_n_repeats
+
+    # Initially all models require simulations -> sims_needed all True
+    sims_needed = np.ones(n_models, dtype='?')
+
+    sims_df = pd.DataFrame(columns=col_names)
+    counts = pd.DataFrame(columns=col_names)
+    estimates = pd.DataFrame(columns=col_names)
+    std_errors = pd.DataFrame(columns=col_names)
+
+    model_ids = np.asarray(model_ids)
+
+    def transform(self, n_reps, n_mods):
+        """ Simulation is in 3D (n_models x n_analyses x n_repeats), dataframes only accept 2D.
+        The results are therefore reshaped and labelled per model. """
+
+        return self.transpose([1, 0, 2]).reshape(n_analyses, n_reps * sum(n_mods)).transpose()
+
+    def label(included_models):
+        """ Create labels to match above transformation. """
+        return np.repeat(np.arange(0, n_models)[included_models], n_repeats)[:, np.newaxis]
+
+    while np.any(sims_needed):
+        mean_cost, proportion_sig, proportion_fut = \
+            simulate_bound_properties(sig_bounds[sims_needed, :], fut_bounds[sims_needed, :], simulator, costs,
+                                      n_simulations, n_repeats, exact_fut_prop, exact_sig_prop)
+
+        sims_df = sims_df.append(pd.DataFrame(
+            np.concatenate((label(sims_needed),
+                            mean_cost.reshape(sum(sims_needed) * n_repeats, 1),
+                            transform(proportion_sig, n_repeats, sims_needed),
+                            transform(proportion_fut, n_repeats, sims_needed)), axis=1),
+            columns=col_names))
+
+        sims_df[col_names[1:]] = sims_df[col_names[1:]].apply(pd.to_numeric, errors='ignore')
+
+        counts = sims_df.groupby('Model id', as_index=True).count()
+        estimates = sims_df.groupby('Model id', as_index=True).mean()
+        std_errors = sims_df.groupby('Model id', as_index=True).std() / (counts ** 0.5)
+
+        # Z-score * SE = length of the CI
+        rel_error = (abs(norm.ppf(0.5 * (1 - CI))) * std_errors / estimates).max(axis=1)
+        ratio = np.asarray(rel_error / rel_tol)
+        sims_needed = ratio > 1
+
+        # Estimate remaining required simulations to use for next iteration
+        # Minimum and maximum added simulations per iteration: _default_n_repeats and _max_n_repeats
+        if np.any(sims_needed):
+            count = (np.asarray(counts[sims_needed])[0, 0])
+            n_repeats = int(np.min(np.ceil(count * ratio[sims_needed] ** 2 - count)))
+            n_repeats = min(max_n_repeats, max(default_n_repeats, n_repeats))
+
+    estimates['Model id'] = model_ids
+    std_errors['Model id'] = model_ids
+    counts['Model id'] = model_ids
+
+    return estimates, std_errors, n_simulations, counts
+
+
+'''
+# test lines
+from statistical_parts.math_parts.t_test_functions import simulate_statistics
+
+rel_tol = 0.01
+CI=0.95
+n_analyses = 3
+model_ids = ['OBF']
+col_names = ['Model id'] + ['Expected_cost'] + \
+                ['% significant at analysis {}'.format(i + 1) for i in range(n_analyses)] + \
+                ['% futile at analysis {}'.format(i + 1) for i in range(n_analyses)]
+default_n_repeats = 10
+max_n_repeats = 100
+
+sig_bounds = [(6.592, 2.284, 1.757)]
+sig_bounds = [(3.186315546, 2.332, 1.947)]
+sig_bounds = [(2.959537434, 2.373, 1.966)]
+
+fut_bounds = [(-0.08572, 1.286, 1.757)]
+fut_bounds = [(0.2225545674, 1.177, 1.947)]
+fut_bounds = [(0.3414654458, 1.1667, 1.966)]
+
+ds = np.arange(1.1, 1.3, 0.001)
+
+def simulator(n_sims):
+        return simulate_statistics(n_sims, np.array([(3, 6, 9), (3, 6, 9)]), 4, cohens_d=ds[i], sides='one')
+    costs = [(6, 12, 18)]
+
+cost_results = np.zeros(ds.size)
+
+for i in range(ds.size):
+
+    estimates, std_errors, n_simulations, counts = \
+        simulate_prop_loop(sig_bounds, fut_bounds, rel_tol, CI, col_names, model_ids, default_n_repeats, max_n_repeats,
+                           simulator, costs, exact_fut_prop=None, exact_sig_prop=None, n_simulations=10 ** 5)
+    
+    cost_results[i] = estimates['Expected_cost']
+    print(cost_results[i], ds[i])
+
+
+
+np.max(cost_results)
+12.844612000000001
+12.463152
+12.786176
+
+d
+1.24
+1.16
+1.1
+
+'''

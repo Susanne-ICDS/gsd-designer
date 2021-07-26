@@ -27,7 +27,8 @@ layout = html.Div(
         html.Br(),
         dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                         children=[label('Error spending functions'),
-                        dbc.Checklist(id='error-spending-function', value=[], options=error_spending_function_dict)]))]
+                        dbc.Checklist(id='error-spending-function', options=error_spending_function_dict,
+                                      value=[item['value'] for item in error_spending_function_dict])]))]
               ),
 
      html.Div(id='DES', hidden=True, children=[

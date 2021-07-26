@@ -3,6 +3,7 @@
 /workspace.xml
 .idea
 __pycache__
+/Article stuff
 
 venv
 *.pyc

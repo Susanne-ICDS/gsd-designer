@@ -441,8 +441,8 @@ def create_evaluation(local, memory_limit):
         for i in range(counts.shape[0] - 1):
             counts_str += ', ' + '{}'.format(counts[col_names[1]][i])
 
-        return [html.B('Simulations finished: '), 'Results per model based on respectively' + counts_str + 'estimates' +
-                                                  ' with {} simulations each'.format(n_simulations)], \
+        return [html.B('Simulations finished: '), 'Results per model based on respectively ' + counts_str +
+                                                  ' estimates with {} simulations each'.format(n_simulations)], \
             'success', True, identify_model, [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
 
 
