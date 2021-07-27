@@ -62,7 +62,7 @@ def give_exact(sample_sizes, alphas, betas, cohens_d, sides):
     """ Give the properties of the first interim analysis for the independent groups t-test
 
     The returned properties are: critical values (significance and futility bounds),
-    the probability of a true negative under H0 and power"""
+    the probability of a true negative under H0, power, lower, and upper limit for the test statistic"""
 
     n_spending_scenarios = int(alphas.shape[0])
     non_central_param = cohens_d * (sample_sizes[0, 0] * sample_sizes[1, 0] /
@@ -78,7 +78,7 @@ def give_exact(sample_sizes, alphas, betas, cohens_d, sides):
         exact_true_neg = t.cdf(fut_bounds, df=degrees_freedom)
         exact_power = 1 - nct.cdf(sig_bounds, df=degrees_freedom, nc=non_central_param)
 
-        return sig_bounds, fut_bounds, exact_true_neg, exact_power
+        return sig_bounds, fut_bounds, exact_true_neg, exact_power, -np.inf, np.inf
 
     elif sides == 'two':
         sig_bounds = t.ppf(1 - 0.5 * alphas[:, 0], df=degrees_freedom)
@@ -104,7 +104,7 @@ def give_exact(sample_sizes, alphas, betas, cohens_d, sides):
         exact_power = 1 - nct.cdf(sig_bounds, df=degrees_freedom, nc=non_central_param) + \
             nct.cdf(-sig_bounds, df=degrees_freedom, nc=non_central_param)
 
-        return sig_bounds, fut_bounds, exact_true_neg, exact_power
+        return sig_bounds, fut_bounds, exact_true_neg, exact_power, 0, np.inf
 
 
 def give_fixed_sample_size(cohens_d, alpha, beta, sides):

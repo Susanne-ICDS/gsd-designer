@@ -411,7 +411,7 @@ def create_evaluation(local, memory_limit):
         # endregion
 
         # region Simulate until the confidence interval for relative error is smaller than tolerance level
-        exact_sig, exact_fut, exact_true_neg, exact_power = \
+        exact_sig, exact_fut, exact_true_neg, exact_power, lower_limit, upper_limit = \
             TestObject(stat_test).give_exact(sample_sizes, alphas, betas, test_param_values)
 
         def simulator_h0(n_sim):
@@ -430,7 +430,7 @@ def create_evaluation(local, memory_limit):
         estimates, std_errors, n_simulations, counts = \
             simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, identify_model['Model id'],
                             _default_n_repeats, _max_n_repeats, simulator_h0, simulator_ha, costs, exact_true_neg,
-                            exact_power)
+                            exact_power, lower_limit, upper_limit)
         # endregion
 
         estimates = estimates.astype(str)

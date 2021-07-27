@@ -10,7 +10,7 @@ from statistical_parts.math_parts import t_test_functions
 from statistical_parts.math_parts import one_way_functions
 
 from layout_instructions import spacing_variables as spacing
-from layout_instructions import label, table_style, regular_text
+from layout_instructions import label, table_style
 
 # Global variables for this page only
 # Preceding underscore '_' makes sure it cannot be imported to other pages
@@ -350,7 +350,6 @@ class OneWay(BasicTest):
                                                              alpha, beta)
 
         return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
-
 
     @staticmethod
     def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):

@@ -85,7 +85,7 @@ def give_exact(sample_sizes, alphas, betas, means, sd):
     exact_power = 1 - ncf.cdf(sig_bounds, dfn=n_groups-1, dfd=denom_degrees_freedom, nc=non_central_param)
     exact_power[np.isnan(exact_power)] = 1 - 10**-8
 
-    return sig_bounds, fut_bounds, exact_true_neg, exact_power
+    return sig_bounds, fut_bounds, exact_true_neg, exact_power, 0, np.inf
 
 
 def give_fixed_sample_size(means, sd, alpha, beta):

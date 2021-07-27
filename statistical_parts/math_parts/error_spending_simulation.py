@@ -28,7 +28,8 @@ def get_sim_nr(alphas, betas, rel_tolerance):
 
 
 def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0, simulator_ha, costs,
-                              n_simulations: int, n_repeats: int, exact_true_neg=None, exact_power=None):
+                              n_simulations: int, n_repeats: int, exact_true_neg=None, exact_power=None,
+                              lower_limit=-np.inf, upper_limit=np.inf):
     """  Simulate the bounds and properties of the specified group sequential design.
 
     :param alphas: (n_models x n_analyses) array-like with the type I error spent per analysis for each GSD
@@ -46,6 +47,9 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
 
     :param exact_true_neg: the exact probability of a true negative at the first analysis for each GSD
     :param exact_power: (n_models) array-like with the exact power at the first analysis for each GSD
+
+    :param lower_limit: lower limit for the test statistic
+    :param upper_limit: upper limit for the test statistic
 
     :return: numpy arrays with the estimates per repeat,
     either (n_models x n_analyses x n_repeats) or (n_models x n_repeats),
@@ -122,7 +126,7 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
                     sig_bounds[i, j, r] = np.quantile(T0[j, undecided_h0],
                                                       1 - ((alphas[i, j] - alphas[i, j - 1]) * n_simulations / left_h0))
                 else:
-                    sig_bounds[i, j, r] = np.inf
+                    sig_bounds[i, j, r] = upper_limit
 
                 if j == n_analyses - 1:
                     # If this is the last analysis, then futility = significance bound to force a decision
@@ -141,11 +145,11 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
 
                 elif betas[i, j] - betas[i, j - 1] > 10**-15:
                     fut_bounds[i, j, r] = np.quantile(TA[j, undecided_ha],
-                                                   (betas[i, j] - betas[i, j - 1]) * n_simulations / left_ha)
+                                                      (betas[i, j] - betas[i, j - 1]) * n_simulations / left_ha)
                     if fut_bounds[i, j, r] >= sig_bounds[i, j, r]:
                         fut_bounds[i, j, r] = sig_bounds[i, j, r]
                 else:
-                    fut_bounds[i, j, r] = - np.inf
+                    fut_bounds[i, j, r] = lower_limit
 
                 # Add the number of times stopped for significance under HA and for futility under H0
                 power[i, j:, r] += np.sum(sig_bounds[i, j, r] <= TA[j, undecided_ha])
@@ -171,7 +175,8 @@ def simulate_empirical_bounds(alphas, betas, exact_sig, exact_fut, simulator_h0,
 
 
 def simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, model_ids, default_n_repeats,
-                    max_n_repeats, simulator_h0, simulator_ha, costs, exact_true_neg=None, exact_power=None):
+                    max_n_repeats, simulator_h0, simulator_ha, costs, exact_true_neg=None, exact_power=None,
+                    lower_limit=-np.inf, upper_limit=np.inf):
     """ Simulate estimates for the properties for the GSDs until the desired relative tolerance level
     for the error confidence interval has been reached."""
 
@@ -204,7 +209,8 @@ def simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names,
         sig_bounds, fut_bounds, mean_cost_h0, mean_cost_ha, power, true_negatives = \
             simulate_empirical_bounds(alphas[sims_needed, :], betas[sims_needed, :], exact_sig[sims_needed],
                                       exact_fut[sims_needed], simulator_h0, simulator_ha, costs, n_simulations,
-                                      n_repeats, exact_true_neg[sims_needed], exact_power[sims_needed])
+                                      n_repeats, exact_true_neg[sims_needed], exact_power[sims_needed],
+                                      lower_limit, upper_limit)
 
         sims_df = sims_df.append(pd.DataFrame(
             np.concatenate((label(sims_needed),
