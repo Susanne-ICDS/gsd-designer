@@ -9,6 +9,8 @@ from scipy.stats import norm
 from layout_instructions import spacing_variables as spacing
 from layout_instructions import label, my_jumbo_box, table_style
 
+# Add a label for a new error spending function here, and add the function itself into the code of e_s_f_2_error_spent
+
 error_spending_function_dict = [{'label': 'Pocock', 'value': 'Pocock'},
                                 {'label': 'O´Brien-Fleming', 'value': 'OBF'},
                                 {'label': 'Linear', 'value': 'Linear'}]

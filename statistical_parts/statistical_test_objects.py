@@ -20,6 +20,8 @@ _default_sample_step = 3
 _min_groups = 2
 _max_groups = 12
 
+# To add a new statistical test, add a label here and define a new object with the NewTest template below
+
 # Dictionary of tests for the dropdown menu
 test_options = [{'label': 't-test', 'value': 'T'},
                 {'label': 'one-way ANOVA', 'value': 'One-way'}]
@@ -180,6 +182,49 @@ class BasicTest:
     @staticmethod
     def fixed_sample_size(*args, **kwargs):
         return 'secondary', 'The fixed sample size calculation has not yet been implemented for this test.'
+
+
+""" NewTest template
+class NewTest(BasicTest):
+    # The definitions included here are the bare minimum you need to add to make it work, but you may want to overwrite 
+    # some of the parental class functions as well
+
+
+    def tab_basic_design(self):
+        # The test specific input fields for the web page.
+        
+        return html.Div(["List of dash objects for the input, make sure the id for simple input values has the form" + 
+                         "id={'type': 'test parameter', 'name': '[Choose your name]', 'form': 'value'} and for" + 
+                         "datatables id={'type': 'test parameter', 'name': '[Choose your name]', 'form': 'datatable'}" 
+                         ])
+                         
+        # In the end everything will be put into a python dictionary called test_parameters, where the keys are the 
+        # 'name' values from the ids above. The datatables are stored as numpy arrays
+        
+    @staticmethod
+    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
+        # Simulate the test statistics, return a numpy array with shape (n_simulations, n_analyses)
+
+        if hypothesis == 'H0':
+            return # put your null hypothesis test statistic simulating function here
+            
+        if hypothesis == 'HA':
+            return # put your alternative hypothesis test statistic simulating function here
+            
+    @staticmethod
+    def give_exact(sample_sizes, alphas, betas, test_parameters):
+        # Return the exact values for the first analysis.
+        # 1-D numpy arrays with the exact significance bounds and futility bounds for teh first analysis
+        # optional: exact true negatives and true positives (i.e. power) at the first analysis
+
+        return exact_sig, exact_fut, exact_true_neg = None, exact_power = None
+        
+    @staticmethod
+    def get_p_equivalent(x, N):
+        # convert test statistic x into the corresponding p-value sample size(s) N (per group)
+        return t_test_functions.get_p_equivalent(x, N)
+        
+"""
 
 
 class TTest(BasicTest):
