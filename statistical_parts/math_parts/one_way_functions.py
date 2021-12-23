@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.stats import norm
 from scipy.stats import f
 from scipy.stats import ncf
 
@@ -67,8 +66,8 @@ def give_exact(sample_sizes, alphas, betas, means, sd):
     The returned properties are: critical values (significance and futility bounds),
     the probability of a true negative under H0 and power"""
 
-    sample_sizes = np.asarray(sample_sizes)
-    expected_means = np.asarray(means)
+    sample_sizes = np.asarray(sample_sizes, dtype='int')
+    expected_means = np.asarray(means, dtype='d')
     n_groups = expected_means.size
     expected_means = expected_means.reshape(n_groups)
 
