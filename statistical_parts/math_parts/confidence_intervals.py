@@ -4,50 +4,69 @@ from scipy.stats import nct, ncf
 import statistical_parts.math_parts.t_test_functions as t_gsd
 import statistical_parts.math_parts.one_way_functions as f_gsd
 
+import dash_html_components as html
+
 
 """
 n_termination = 2
-T = 2.311
-sig_bounds = np.array([6.592, 2.284, 1.757])
-fut_bounds = np.array([-0.08572, 1.286, 1.757])
-sample_sizes = np.array([(3, 6, 8), (3, 6, 8)], dtype=int)
+T = 1
+sig_bounds = np.array([2.569501651, 1.94])
+fut_bounds = np.array([0.951888, 1.94])
+sample_sizes = np.array([(3, 6), (3, 6)], dtype=int)
 alpha = 0.1
 
+test = 'T'
+one_sided = True
 memory_limit = 2
-max_iter=10**6
+max_iter=10**2
 tol_d=10**-3
 tol_e=10**-3
 """
 
 
 def simulate_effect_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, test, one_sided=True,
-                       tol_d=10**-3, tol_e=10**-3, memory_limit=2, max_iter=10**6):
-    if test == "one-way" or one_sided:
-        return simulate_stage_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, tol_d, tol_e,
-                               memory_limit, max_iter)
+                       tol_d=10**-3, tol_e=10**-3, memory_limit=2, max_iter=10**3):
+    if test == "One-way" or one_sided:
+        estimate, lower, higher = simulate_stage_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha,
+                                                         tol_d, tol_e, memory_limit, max_iter)
     elif np.all(fut_bounds == 0):
-        return simulate_stage_wise_CI(n_termination, T, sig_bounds, -sig_bounds, sample_sizes, alpha, tol_d, tol_e,
-                                      memory_limit, max_iter)
+        estimate, lower, higher = simulate_stage_wise_CI(n_termination, T, sig_bounds, -sig_bounds, sample_sizes, alpha,
+                                                         tol_d, tol_e, memory_limit, max_iter)
+    else:
+        estimate, lower, higher = simulate_effect_wise_CI(n_termination, T, sig_bounds, sample_sizes, alpha, tol_d,
+                                                          tol_e, memory_limit, max_iter)
 
-    #else:
-    #    return simulate_effect_wise_CI(n_termination, T, sig_bounds, sample_sizes, alpha, tol_d, tol_e, memory_limit,
-    #                                   max_iter)
+    if np.isnan(estimate) or np.isnan(lower) or np.isnan(higher):
+        return "The algorithm did not converge. Consider increasing the maximum allowed iterations or the error " \
+               "tolerance."
+
+    if n_termination > 1:
+        max_round = -int(np.floor(np.log10(tol_d)) + 1)
+        estimate = round(estimate, min(-int(np.floor(np.log10(np.abs(estimate * tol_d)))) - 1, max_round))
+        lower = round(lower, min(-int(np.floor(np.log10(np.abs(lower * tol_d)))) - 1, max_round))
+        higher = round(higher, min(-int(np.floor(np.log10(np.abs(higher * tol_d)))) - 1, max_round))
+
+    if test == 'T':
+        return ["Cohen's d: {}".format(estimate), html.Br(),
+                "{}%-confidence interval: [{}, {}]".format((1 - alpha) * 100, lower, higher)]
+    elif test == 'One-way':
+        return ["Eta squared: {}".format(estimate), html.Br(),
+                "{}%-confidence interval: [{}, {}]".format((1 - alpha) * 100, lower, higher)]
 
 
 def simulate_stage_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, tol_d, tol_e, memory_limit,
-                           max_iter=10**5):
+                           max_iter=10**3):
     n1 = sample_sizes[0, n_termination-1]
     n2 = sample_sizes[1, n_termination-1]
 
-    """
-    d_estimate = T * (1 / n1 + 1 / n2) ** 0.5
-    correction = gamma(df / 2) / ((df / 2) ** 0.5 * gamma((df - 1) / 2))
-    d_estimate = correction * d_estimate
-    """
     df = n1 + n2 - 2
     nc_parameter = T
     CI_lower = nct.ppf(alpha / 2, df=df, nc=nc_parameter) / (n1 * n2 / (n1 + n2)) ** 0.5
     CI_upper = nct.ppf(1 - alpha / 2, df=df, nc=nc_parameter) / (n1 * n2 / (n1 + n2)) ** 0.5
+
+    if n_termination == 1:
+        d_estimate = T * (1 / n1 + 1 / n2) ** 0.5
+        return d_estimate, CI_lower, CI_upper
 
     sample_sizes = sample_sizes[:, :n_termination]
     sig_bounds = sig_bounds[:n_termination]
@@ -75,19 +94,19 @@ def simulate_stage_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_size
 
 
 def simulate_effect_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, tol_d, tol_e, memory_limit,
-                            max_iter=10**5):
+                            max_iter=10**3):
     n1 = sample_sizes[0, n_termination - 1]
     n2 = sample_sizes[1, n_termination - 1]
-    d_estimate = T * (1 / n1 + 1 / n2) ** 0.5
     df = n1 + n2 - 2
-    correction = gamma(df / 2) / ((df / 2) ** 0.5 * gamma((df - 1) / 2))
-    d_estimate = correction * d_estimate
-    nc_parameter = d_estimate * (n1 * n2 / (n1 + n2)) ** 0.5
-    CI_lower = nct.ppf(alpha / 2, df=df, nc=nc_parameter) / (n1 * n2 / (n1 + n2)) ** 0.5
-    CI_upper = nct.ppf(1 - alpha / 2, df=df, nc=nc_parameter) / (n1 * n2 / (n1 + n2)) ** 0.5
+    CI_lower = nct.ppf(alpha / 2, df=df, nc=T) / (n1 * n2 / (n1 + n2)) ** 0.5
+    CI_upper = nct.ppf(1 - alpha / 2, df=df, nc=T) / (n1 * n2 / (n1 + n2)) ** 0.5
+
+    if n_termination == 1:
+        d_estimate = T * (1 / n1 + 1 / n2) ** 0.5
+        return d_estimate, CI_lower, CI_upper
 
     def simulator(n, effect_size):
-        return t_gsd.simulate_statistics(n, sample_sizes, memory_limit, d_estimate, 'one')
+        return t_gsd.simulate_statistics(n, sample_sizes, memory_limit, effect_size, 'one')
 
     lower, higher = create_solution_interval(CI_upper, simulator, n_termination, sig_bounds, fut_bounds, 1 - alpha / 2,
                                              tol_e, max_iter, effect_wise=True, T=T, sample_sizes=sample_sizes)
@@ -116,6 +135,9 @@ def simulate_eta2_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alp
     CI_lower = CI_lower/(CI_lower + dfd/(n_groups-1))
     CI_upper = ncf.ppf(1-alpha / 2, dfn=n_groups - 1, dfd=dfd, nc=ncp)
     CI_upper = CI_upper / (CI_upper + dfd / (n_groups - 1))
+
+    if n_termination == 1:
+        return eta2, CI_lower, CI_upper
 
     sample_sizes = sample_sizes[:, :n_termination]
     sig_bounds = sig_bounds[:n_termination]
@@ -159,10 +181,10 @@ def create_solution_interval(start_point, simulator, n_termination, sig_bounds, 
 
     if effect_wise:
         flag = simulate_until_decision_effect_wise(lambda n: simulator(n, start_point), n_termination, T, sample_sizes,
-                                                   sig_bounds, fut_bounds, val, tol_e, max_iter=max_iter)
+                                                   sig_bounds, fut_bounds, val, tol_e, max_iter=max_iter**2)
     else:
         flag = simulate_until_decision(lambda n: simulator(n, start_point), n_termination, sig_bounds, fut_bounds,
-                                       val, tol_e, max_iter=max_iter)
+                                       val, tol_e, max_iter=max_iter**2)
 
     if flag == 0:
         return start_point, start_point
@@ -171,10 +193,13 @@ def create_solution_interval(start_point, simulator, n_termination, sig_bounds, 
         if effect_size_positive:
             new_point = higher * 0.9
         else:
-            new_point = higher - 0.1*np.abs(higher)
+            new_point = higher - max(0.1 * np.abs(higher), 0.1)
     elif flag == -1:
         lower = start_point
-        new_point = lower * 1.1
+        if effect_size_positive:
+            new_point = lower * 1.1
+        else:
+            new_point = lower + max(0.1 * np.abs(lower), 0.1)
     elif np.isnan(flag):
         return np.nan, start_point
     else:
@@ -184,10 +209,10 @@ def create_solution_interval(start_point, simulator, n_termination, sig_bounds, 
         if effect_wise:
             new_flag = simulate_until_decision_effect_wise(lambda n: simulator(n, new_point), n_termination, T,
                                                            sample_sizes, sig_bounds, fut_bounds, val, tol_e,
-                                                           max_iter=max_iter)
+                                                           max_iter=max_iter**2)
         else:
             new_flag = simulate_until_decision(lambda n: simulator(n, new_point), n_termination, sig_bounds, fut_bounds,
-                                               val, tol_e, max_iter=max_iter)
+                                               val, tol_e, max_iter=max_iter**2)
 
         if new_flag == 0:
             return new_point, new_point
@@ -197,13 +222,16 @@ def create_solution_interval(start_point, simulator, n_termination, sig_bounds, 
                 if effect_size_positive:
                     new_point = higher * 0.9
                 else:
-                    new_point = higher - 0.1 * np.abs(higher)
+                    new_point = higher - max(0.1 * np.abs(higher), 0.1)
             else:
                 break
         elif new_flag == -1:
             lower = new_point
             if new_flag == flag:
-                new_point = lower * 1.1
+                if effect_size_positive:
+                    new_point = lower * 1.1
+                else:
+                    new_point = lower + max(0.1 * np.abs(lower), 0.1)
             else:
                 break
         elif np.isnan(new_flag):
@@ -224,10 +252,10 @@ def search_interval(lower, higher, simulator, n_termination, sig_bounds, fut_bou
 
         if effect_wise:
             flag = simulate_until_decision_effect_wise(lambda n: simulator(n, estimate), n_termination, T, sample_sizes,
-                                                       sig_bounds, fut_bounds, val, tol_e, max_iter=max_iter)
+                                                       sig_bounds, fut_bounds, val, tol_e, max_iter=max_iter**2)
         else:
             flag = simulate_until_decision(lambda n: simulator(n, estimate), n_termination, sig_bounds, fut_bounds,
-                                           val, tol_e, max_iter=max_iter)
+                                           val, tol_e, max_iter=max_iter**2)
         if flag == 0:
             return estimate
         elif flag == 1:
@@ -281,7 +309,7 @@ def simulate_until_decision(simulator, n_termination, sig_bounds, fut_bounds, co
 
 
 def simulate_until_decision_effect_wise(simulator, n_termination, T, sample_sizes, sig_bounds, fut_bounds, compare_val,
-                                        tol_e, base_step=100, max_step=10**5, max_iter=10**5):
+                                        tol_e, base_step=100, max_step=10**6, max_iter=10**6):
     n = max_step
     n_larger = 0
     n_sims = 0
@@ -321,42 +349,3 @@ def simulate_until_decision_effect_wise(simulator, n_termination, T, sample_size
 
     return decision
 
-
-
-"""
-def aa_cohensD_CI(n_termination, T, sig_ps, fut_ps, sample_sizes, alpha, one_sided=True):
-    if one_sided:
-        return aa_stage_wise_CI(n_termination, T, sig_ps, fut_ps, sample_sizes, alpha)
-
-    elif np.all(fut_ps == 0):
-        return aa_stage_wise_CI(n_termination, T, sig_ps, -sig_ps, sample_sizes, alpha)
-
-    else:
-        return aa_effect_wise_CI(n_termination, T, sig_ps, sample_sizes, alpha)
-
-
-def aa_stage_wise_CI(n_termination, T, sig_ps, fut_ps, sample_sizes, alpha):
-    dfs = np.sum(sample_sizes, axis=0) - 2
-    ncp_d_factor = (np.prod(sample_sizes, axis=0) / np.sum(sample_sizes, axis=0)) ** 0.5
-
-    cov_matrix = np.ones((n_termination, n_termination))
-    for i in range(n_termination):
-        for j in np.arange(i + 1, n_termination):
-            cov_matrix[i, j] = cov_matrix[j, i] = (ncp_d_factor[i]/ncp_d_factor[j])
-
-    if 1-t.cdf(T, df=dfs[n_termination - 1]) > sig_ps[n_termination - 1]:
-
-        sig_ps[n_termination - 1] = 1 - t.cdf(T, df=dfs[n_termination - 1])
-        sig_Zs = norm.ppf(1 - sig_ps)
-        fut_Zs = norm.ppf(1 - fut_ps)
-
-        def rel_prob(d):
-            pass
-            # TO DO
-
-
-def aa_effect_wise_CI(n_termination, T, sig_ps, sample_sizes, alpha):
-    pass
-    # TO DO
-
-"""

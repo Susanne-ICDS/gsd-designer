@@ -8,7 +8,7 @@ import numpy as np
 from app import dash_app, server
 import callbacks
 
-from tabs import navbar, tab_basic_design, tab_interim_analyses, tab_error_spending, tab_simulation
+from tabs import navbar, tab_basic_design, tab_interim_analyses, tab_error_spending, tab_simulation, tab_CI
 
 from layout_instructions import spacing_variables as spacing
 
@@ -18,7 +18,6 @@ BISI_LOGO = '/assets/Logos.svg'
 version = '0.3.' + str(int(open("version.txt", "r").read()))
 local = False
 memory_limit = 1 - 0.25  # in GigaByte
-callbacks.create_evaluation(local, memory_limit)
 
 dash_app.layout = html.Div(children=[navbar.bar, dbc.Container([
 
@@ -28,7 +27,7 @@ dash_app.layout = html.Div(children=[navbar.bar, dbc.Container([
     html.Div(id='interim-analyses', hidden=True, children=tab_interim_analyses.layout),
     html.Div(id='error-spending', hidden=True, children=tab_error_spending.layout),
     html.Div(id='simulation', hidden=True, children=tab_simulation.layout),
-
+    html.Div(id='effect-size-CI', hidden=True, children=tab_CI.layout),
 
     html.Br(),
     html.Br(),
@@ -89,6 +88,9 @@ dash_app.layout = html.Div(children=[navbar.bar, dbc.Container([
     # This is a list of two json serialized pandas dataframes 1) the estimates and 2) their standard errors.
 
 ], fluid=True)])
+
+callbacks.create_evaluation(local, memory_limit)
+callbacks.create_evaluation_CI(local, memory_limit)
 
 if __name__ == '__main__':
     dash_app.run_server(debug=True)

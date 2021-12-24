@@ -16,6 +16,7 @@ from app import dash_app
 from statistical_parts.statistical_test_objects import TestObject
 from statistical_parts.error_spending import check_form_error_spent
 from statistical_parts.math_parts.error_spending_simulation import simulation_loop
+from statistical_parts.math_parts.confidence_intervals import simulate_effect_CI
 
 from layout_instructions import table_style, disabled_style_header, disabled_style_data, label
 from layout_instructions import spacing_variables as spacing
@@ -29,34 +30,44 @@ _max_n_repeats = 10 ** 6
     Output('interim-analyses', 'hidden'),
     Output('error-spending', 'hidden'),
     Output('simulation', 'hidden'),
+    Output('effect-size-CI', 'hidden'),
     Output('tab1', 'active'),
     Output('tab2', 'active'),
     Output('tab3', 'active'),
     Output('tab4', 'active'),
+    Output('tab5', 'active'),
     Output('previous', 'disabled'),
     Output('next', 'disabled'),
     Output('previous', 'href'),
     Output('next', 'href'),
     Input('url', 'pathname'))
 def navigation(path):
+    tabs = np.array(['/basic-design', '/interim-analyses', '/error-spending', '/simulation', '/effect-size-CI'])
+    n_tabs = tabs.size
+
     if path is None:
-        return False, True, True, True, True, False, False, False, True, False, None, '/interim-analyses'
+        hidden_pages = np.ones(np.size(tabs), dtype=bool)
+        hidden_pages[0] = False
+        list_of_outputs = [None for _ in range(2 * n_tabs + 4)]
+        list_of_outputs[:n_tabs] = hidden_pages
+        list_of_outputs[n_tabs:2*n_tabs] = np.logical_not(hidden_pages)
+        list_of_outputs[-4:] = [True, False, None, tabs[1]]
+        return tuple(list_of_outputs)
 
     first = path == '/basic-design'
-    last = path == '/simulation'
-    tabs = np.array(['/basic-design', '/interim-analyses', '/error-spending', '/simulation'])
-    current_tab = int(np.arange(0, 4)[tabs == path])
+    last = path == '/effect-size-CI'
+    current_tab = int(np.arange(0, np.size(tabs))[tabs == path])
     previous_tab = None
     next_tab = None
 
     if current_tab > 0:
         previous_tab = tabs[current_tab - 1]
-    if current_tab < 3:
+    if current_tab < np.size(tabs) - 1:
         next_tab = tabs[current_tab + 1]
 
     return path != '/basic-design', path != '/interim-analyses', path != '/error-spending', path != '/simulation', \
-        path == '/basic-design', path == '/interim-analyses', path == '/error-spending', path == '/simulation', \
-        first, last, previous_tab, next_tab
+        path != '/effect-size-CI', path == '/basic-design', path == '/interim-analyses', path == '/error-spending', \
+        path == '/simulation', path == '/effect-size-CI', first, last, previous_tab, next_tab
 
 
 @dash_app.callback(
@@ -304,6 +315,7 @@ def add_row(n_clicks, n_analyses, rows, columns):
 # endregion
 
 
+# region critical bound simulation
 def create_evaluation(local, memory_limit):
     @dash_app.callback(
         Output('status', 'children'),
@@ -448,6 +460,7 @@ def create_evaluation(local, memory_limit):
 
 @dash_app.callback(
     Output('table', 'children'),
+    Output('used_model', 'options'),
     Input('estimates', 'data'),
     State('CI', 'value'),
     State('identify_model', 'data'))
@@ -559,7 +572,8 @@ def print_the_table(df, CI, model_info):
                                       'Please keep in mind that after the first analysis the reported p-values no '
                                       'longer match their traditional definition.',  html.Br()])),
             dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
-                            children=[table3, html.Br()]))]
+                            children=[table3, html.Br()]))], \
+        [{'label': str(item["Model id"]), 'value': str(item["Model id"])} for item in results_dict]
 
 
 @dash_app.callback(Output('download', 'data'),
@@ -654,3 +668,72 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
             writer.save()
 
         return send_bytes(to_xlsx, "your_design.xlsx")
+
+# endregion
+
+
+@dash_app.callback(Output('n_termination', 'min'),
+                   Output('n_termination', 'max'),
+                   Input('used_model', 'value'),
+                   State('identify_model', 'data'))
+def update_analysis_number(model_id, model_info):
+    if model_id is None or model_info is None:
+        raise PreventUpdate
+    return 1, model_info["Number of analyses"]
+
+
+def create_evaluation_CI(local, memory_limit):
+    @dash_app.callback(Output('effect_estimate', 'children'),
+                       Input('ci_button', 'n_clicks'),
+                       State('used_model', 'value'),
+                       State('identify_model', 'data'),
+                       State('estimates', 'data'),
+                       State('n_termination', 'value'),
+                       State('result_statistic', 'value'),
+                       State('ci_confidence', 'value'),
+                       State('rel-tol-CI', 'value'),
+                       State('max_iter', 'value'))
+    def simulate_CI(n_clicks, model_id, model_info, df, n_termination, T, confidence_level, rel_tol, max_iter):
+        if n_clicks is None:
+            raise PreventUpdate
+
+        # region check user input and transform
+        if model_id is None:
+            return "Please select the used design."
+
+        n_analyses = model_info['Number of analyses']
+        sample_sizes = np.asarray(model_info['Sample sizes'], dtype=int)
+        test = model_info['Test']
+        if test == 'One-way':
+            one_sided = True
+        elif test == 'T':
+            one_sided = model_info['sides'] == 'one'
+        else:
+            raise ValueError
+
+        estimates = pd.read_json(df[0], orient='split')
+        model_n = estimates['Model id'] == model_id
+        sig_bounds = np.zeros(n_analyses)
+        fut_bounds = np.zeros(n_analyses)
+
+        for i in range(n_analyses):
+            sig_bounds[i] = estimates['Sig. bound {}'.format(i + 1)][model_n]
+            fut_bounds[i] = estimates['Fut. bound {}'.format(i + 1)][model_n]
+
+        if fut_bounds[n_termination - 1] < T < sig_bounds[n_termination - 1]:
+            return 'The test statistic should be either larger than the significance bound or smaller than the ' \
+                   'futility bound at the termination of the experiment. Please check your input.'
+
+        if confidence_level == 0 or confidence_level == 1:
+            'The confidence level should be strictly larger than zero and strictly smaller than one.'
+
+        alpha = 1 - confidence_level
+
+        # endregion
+
+        relevant_info = fut_bounds
+
+        estimate_text = simulate_effect_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, test,
+                                           one_sided, rel_tol, rel_tol, memory_limit, 10**max_iter)
+
+        return estimate_text

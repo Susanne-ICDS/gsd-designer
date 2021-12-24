@@ -11,31 +11,50 @@ _default_accuracy = 10 ** -2
 _min_accuracy = 10 ** -4
 _max_accuracy = 10 ** -1
 
-
 layout = html.Div([
     my_jumbo_box('Estimates and confidence intervals', 'Analysis after termination of the experiment'),
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                     children=[
                         html.Br(),
-                        # Things needed on this page: model selection
-                        # Input termination results
-                        # Buttons to do the thing
 
-                        label('Results'), html.Br(),
-                        regular_text('Click this button to simulate the properties of your design. The results remain '
-                                     'even if you navigate away from this page, as long as you do not close your '
-                                     'browser.'), html.Br(),
-                        dbc.Button('Analytical approximation', id='aa_button', color='primary')
+                        label('Used design'), html.Br(),
+                        regular_text('Select the design you used. The ids in the dropdown menu refer to the models '
+                                     'evaluated on the previous page. Note that if you entered all the values, you '
+                                     'still need to simulate the critical bounds before you can select them to '
+                                     'evaluate the CI.'), html.Br(),
+                        dbc.Select(id="used_model", options=[]), html.Br(),
+                        html.Br(),
+                        label('Number of analyses and test statistic at termination')
                         ])),
+    dbc.Row([dbc.Col(width={'offset': spacing['offset'], 'size': spacing['float_input']},
+                     children=[
+                        dbc.Input(id='n_termination', placeholder='Analysis number', type='number',
+                                  min=0, max=0, step=1)]),
+             dbc.Col(width=spacing['float_input'],
+                     children=[
+                         dbc.Input(id='result_statistic', placeholder='Test statistic', type='number', step=10**-4)
+                     ])]),
     html.Br(),
 
+    dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
+                    children=[label('Confidence level of the interval')])),
+
+    dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['float_input']},
+                    children=[
+                         dbc.Input(id='ci_confidence', placeholder='Confidence level', type='number', value=0.9, min=0,
+                                   max=1, step=10**-4)])),
+    html.Br(),
+
+    dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
+                    children=[label('Estimate and confidence interval of the effect size'), html.Br(),
+                              html.Br(),
+                              dbc.Button('Evaluate', id='ci_button', color='primary')])),
+
+    html.Br(),
     # A little loading GIF is shown as long as the simulations are running.
     dcc.Loading(id="loadingItemCI", type="default",
                 children=[dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': 'auto'},
-                                          children=[dbc.Alert(id="status", dismissable=True, is_open=False)])),
-                          html.Div(id='table', children=[
-                              dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': 'auto'},
-                                              children=['No previous simulations']))])]),
+                                          children=[html.Div(id='effect_estimate')]))]),
 
     # The simulation results are shown in the div 'table'
     # The 'status' div is used to either invite the user to push the button,
@@ -44,19 +63,15 @@ layout = html.Div([
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                     children=[
                         html.Br(),
-                        label('Relative tolerance and confidence level'),
-                        html.Div(id='explain-accuracy'),
-                        # This div shows the user a string explaining what the below parameters mean.
-                        # Since users are likely not familiar with numerical approximation terminology
-                        ])),
+                        label('Relative tolerance and maximum iterations')
+                    ])),
     dbc.Row([dbc.Col(width={'offset': spacing['offset'], 'size': spacing['float_input']},
                      children=[
-                        dbc.Input(id='relative-tolerance', placeholder='Relative tolerance', type='number',
+                        dbc.Input(id='rel-tol-CI', placeholder='Relative tolerance', type='number',
                                   value=_default_accuracy, min=_min_accuracy, max=_max_accuracy, step=_min_accuracy)]),
-             dbc.Col(width=spacing['float_input'],
-                     children=[
-                         dbc.Input(id='CI', placeholder='Confidence level', type='number', value=0.95, min=0, max=1,
-                                   step=10**-4)
-                     ])]),
+            dbc.Col(width={'size': 'size'}, children=[regular_text(', 10^')], align="end"),
+            dbc.Col(width={'size': spacing['int_input']},
+                    children=[
+                        dbc.Input(id='max_iter', placeholder='', type='number', value=3, min=2, max=5, step=1)])
+            ])
 ])
-
