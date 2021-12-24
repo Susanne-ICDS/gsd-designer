@@ -73,7 +73,6 @@ dash_app.layout = html.Div(children=[navbar.bar, dbc.Container([
                      children=[html.Br(),
                                'App developed by: Susanne Blotwijk', html.Br(),
                                html.Br(), 'Version: ' + version, html.Br(),
-                               html.Br(), 'Copyright: 2021-{}'.format(datetime.datetime.now().year),
                                ])],
             style={'color': '#fff', 'background-color': '#1E1E1E', 'font-family': 'Roboto'},
             justify="center"),
