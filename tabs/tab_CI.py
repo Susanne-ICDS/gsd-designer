@@ -54,7 +54,10 @@ layout = html.Div([
     # A little loading GIF is shown as long as the simulations are running.
     dcc.Loading(id="loadingItemCI", type="default",
                 children=[dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': 'auto'},
-                                          children=[html.Div(id='effect_estimate')]))]),
+                                          children=[html.Div(id='effect_estimate',
+                                                             children=['If the experiment terminated at the first '
+                                                                       'analysis, this is just the classical estimate '
+                                                                       'and CI'])]))]),
 
     # The simulation results are shown in the div 'table'
     # The 'status' div is used to either invite the user to push the button,

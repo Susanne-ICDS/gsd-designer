@@ -729,9 +729,12 @@ def create_evaluation_CI(local, memory_limit):
 
         alpha = 1 - confidence_level
 
+        if T < 0:
+            return 'Please enter a positive test statistic. For a t-test, this merely flips the order of the groups '\
+                   'being compared. For an ANOVA, negative values are not possible.'
+        elif T == 0 and test == 'One-way':
+            return 'Please enter a strictly positive test statistic.'
         # endregion
-
-        relevant_info = fut_bounds
 
         estimate_text = simulate_effect_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, test,
                                            one_sided, rel_tol, rel_tol, memory_limit, 10**max_iter)

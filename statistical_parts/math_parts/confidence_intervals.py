@@ -9,42 +9,52 @@ import dash_html_components as html
 
 """
 n_termination = 2
-T = 1
-sig_bounds = np.array([2.569501651, 1.94])
-fut_bounds = np.array([0.951888, 1.94])
-sample_sizes = np.array([(3, 6), (3, 6)], dtype=int)
+T = 7.1
+sig_bounds = np.array([6.55, 4.8])
+fut_bounds = np.array([0, 0])
+sample_sizes = np.array([(3, 6), (3, 6), (3, 6)], dtype=int)
 alpha = 0.1
 
-test = 'T'
-one_sided = True
+test = 'One-way'
+one_sided = False
 memory_limit = 2
-max_iter=10**2
-tol_d=10**-3
-tol_e=10**-3
+max_iter=10**3
+tol_d=10**-2
+tol_e=10**-2
 """
 
 
 def simulate_effect_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, test, one_sided=True,
                        tol_d=10**-3, tol_e=10**-3, memory_limit=2, max_iter=10**3):
-    if test == "One-way" or one_sided:
+    if test == "One-way":
+        estimate, lower, higher = simulate_eta2_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha,
+                                                   tol_d, tol_e, memory_limit, max_iter)
+    elif one_sided:
         estimate, lower, higher = simulate_stage_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha,
                                                          tol_d, tol_e, memory_limit, max_iter)
     elif np.all(fut_bounds == 0):
         estimate, lower, higher = simulate_stage_wise_CI(n_termination, T, sig_bounds, -sig_bounds, sample_sizes, alpha,
                                                          tol_d, tol_e, memory_limit, max_iter)
     else:
-        estimate, lower, higher = simulate_effect_wise_CI(n_termination, T, sig_bounds, sample_sizes, alpha, tol_d,
-                                                          tol_e, memory_limit, max_iter)
+        estimate, lower, higher = simulate_effect_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha,
+                                                          tol_d, tol_e, memory_limit, max_iter)
 
     if np.isnan(estimate) or np.isnan(lower) or np.isnan(higher):
         return "The algorithm did not converge. Consider increasing the maximum allowed iterations or the error " \
                "tolerance."
 
     if n_termination > 1:
-        max_round = -int(np.floor(np.log10(tol_d)) + 1)
-        estimate = round(estimate, min(-int(np.floor(np.log10(np.abs(estimate * tol_d)))) - 1, max_round))
-        lower = round(lower, min(-int(np.floor(np.log10(np.abs(lower * tol_d)))) - 1, max_round))
-        higher = round(higher, min(-int(np.floor(np.log10(np.abs(higher * tol_d)))) - 1, max_round))
+        max_round = -int(np.floor(np.log10(tol_d)))
+
+        def rel_round(x):
+            if x != 0:
+                return round(x, min(-int(np.floor(np.log10(np.abs(x * tol_d)))) - 1, max_round))
+            else:
+                return x
+
+        estimate = rel_round(estimate)
+        lower = rel_round(lower)
+        higher = rel_round(higher)
 
     if test == 'T':
         return ["Cohen's d: {}".format(estimate), html.Br(),
@@ -121,13 +131,13 @@ def simulate_effect_wise_CI(n_termination, T, sig_bounds, fut_bounds, sample_siz
     d_estimate = search_interval(CI_lower, CI_upper, simulator, n_termination, sig_bounds, fut_bounds, 0.5,
                                  tol_d, tol_e, max_iter, effect_wise=True, T=T, sample_sizes=sample_sizes)
 
-    return d_estimate, CI_upper, CI_lower
+    return d_estimate, CI_lower, CI_upper
 
 
 def simulate_eta2_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alpha, tol_d, tol_e, memory_limit,
                      max_iter=10**3):
     n_groups = sample_sizes.shape[0]
-    dfd = np.sum(sample_sizes[:, n_termination - 1] - n_groups)
+    dfd = np.sum(sample_sizes[:, n_termination - 1]) - n_groups
     eta2 = T/(T + dfd / (n_groups - 1))
     ncp = np.sum(sample_sizes[:, n_termination - 1]) * eta2/(1 - eta2)
 
@@ -151,15 +161,15 @@ def simulate_eta2_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alp
         means[0] = n_groups**0.5 * lambda_guess
         return f_gsd.simulate_statistics(n, sample_sizes, memory_limit, means, 1)
 
-    lower_not_zero = simulate_until_decision(simulator, n_termination, sig_bounds, fut_bounds, alpha/2, tol_e,
-                                             max_iter=max_iter)
+    lower_not_zero = simulate_until_decision(lambda n: simulator(n, 0), n_termination, sig_bounds, fut_bounds, alpha/2,
+                                             tol_e, max_iter=max_iter)
 
-    if lower_not_zero == 1:
+    if lower_not_zero == -1:
         lower, higher = create_solution_interval(CI_lower, simulator, n_termination, sig_bounds, fut_bounds, alpha / 2,
                                                  tol_e, max_iter, effect_size_positive=True)
         CI_lower = search_interval(lower, higher, simulator, n_termination, sig_bounds, fut_bounds, alpha / 2, tol_d,
                                    tol_e, max_iter)
-    elif lower_not_zero == 0 or lower_not_zero == -1:
+    elif lower_not_zero == 0 or lower_not_zero == 1:
         CI_lower = 0
     else:
         CI_lower = np.nan
@@ -172,7 +182,7 @@ def simulate_eta2_CI(n_termination, T, sig_bounds, fut_bounds, sample_sizes, alp
     eta2_estimate = search_interval(CI_lower, CI_upper, simulator, n_termination, sig_bounds, fut_bounds, 0.5,
                                     tol_d, tol_e, max_iter)
 
-    return eta2_estimate, CI_upper, CI_lower
+    return eta2_estimate, CI_lower, CI_upper
 
 
 def create_solution_interval(start_point, simulator, n_termination, sig_bounds, fut_bounds, val, tol_e, max_iter,
@@ -289,20 +299,27 @@ def simulate_until_decision(simulator, n_termination, sig_bounds, fut_bounds, co
 
         estimate = n_larger/n_sims
         if estimate == 0 or estimate == 1:
+            if max(compare_val * (1 - compare_val))**0.5 / (n_sims ** 0.5) * 10 < min(compare_val, 1 - compare_val):
+                if estimate == 0:
+                    return -1
+                else:
+                    return 1
+
+            n = max_step
             continue
 
         sd = (estimate * (1 - estimate))**0.5
         if np.abs(estimate - compare_val) > 2.576 * sd / n_sims ** 0.5:
             decision = np.sign(estimate - compare_val)
             break
-        elif 2.576 * sd / n_sims ** 0.5 < max(min(compare_val, 1 - compare_val) * tol_e, tol_e * 10**-2):
+        elif 2.576 * sd / n_sims ** 0.5 < max(min(compare_val, 1 - compare_val) * tol_e, tol_e * 10**-1):
             decision = 0
             break
         else:
             if np.abs(estimate - compare_val) == 0:
                 n = max_step
             else:
-                n = int((1.96 * sd / np.abs(estimate - compare_val)) ** 2 - n_sims) + 1
+                n = int((2.576 * sd / np.abs(estimate - compare_val)) ** 2 - n_sims) + base_step
                 n = max(min(n, max_step), base_step)
 
     return decision
@@ -310,7 +327,7 @@ def simulate_until_decision(simulator, n_termination, sig_bounds, fut_bounds, co
 
 def simulate_until_decision_effect_wise(simulator, n_termination, T, sample_sizes, sig_bounds, fut_bounds, compare_val,
                                         tol_e, base_step=100, max_step=10**6, max_iter=10**6):
-    n = max_step
+    n = max(min(int(max(1/compare_val, 1/(1 - compare_val)) * 100), max_step), base_step)
     n_larger = 0
     n_sims = 0
 
@@ -340,11 +357,11 @@ def simulate_until_decision_effect_wise(simulator, n_termination, T, sample_size
         if np.abs(estimate - compare_val) > 2.576 * sd / n_sims ** 0.5:
             decision = np.sign(estimate - compare_val)
             break
-        elif 2.576 * sd / n_sims ** 0.5 < max(min(compare_val, 1 - compare_val) * tol_e, tol_e*10**-2):
+        elif 2.576 * sd / n_sims ** 0.5 < max(min(compare_val, 1 - compare_val) * tol_e, tol_e * 10**-1):
             decision = 0
             break
         else:
-            n = int((1.96 * sd / np.abs(estimate - compare_val)) ** 2 - n_sims) + 1
+            n = int((2.576 * sd / np.abs(estimate - compare_val)) ** 2 - n_sims) + base_step
             n = max(min(n, max_step), base_step)
 
     return decision

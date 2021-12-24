@@ -15,7 +15,7 @@ from layout_instructions import spacing_variables as spacing
 app = server
 
 BISI_LOGO = '/assets/Logos.svg'
-version = '0.3.' + str(int(open("version.txt", "r").read()))
+version = '0.4.' + str(int(open("version.txt", "r").read()))
 local = False
 memory_limit = 1 - 0.25  # in GigaByte
 
