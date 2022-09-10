@@ -19,13 +19,13 @@ layout = html.Div([
                    ])),
 
     html.Br(),
-    dbc.Row(dbc.Col(label('Total allowed type I and type II errors'),
+    dbc.Row(dbc.Col(label('Total allowed type I error (alpha) and desired power (1-beta)'),
                     width={'offset': spacing['offset'], 'size': spacing['size']})),
 
     dbc.Row([dbc.Col(dbc.Input(id='alpha', placeholder='Type I error', type='number', value=0.05, debounce=True,
                                min=0, max=1, step=10**-5), width={'offset': spacing['offset'],
                                                                   'size': spacing['float_input']}),
-             dbc.Col(dbc.Input(id='beta', placeholder='Type II error', type='number', value=0.2, debounce=True,
+             dbc.Col(dbc.Input(id='power', placeholder='Power', type='number', value=0.8, debounce=True,
                                min=0, max=1, step=10**-5), width=spacing['float_input'])
              ]),
 

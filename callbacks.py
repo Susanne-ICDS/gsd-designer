@@ -184,19 +184,19 @@ def update_input_table(n_groups, stat_test, rows):
     Input('url', 'pathname'),
     State('stat_test', 'value'),
     State('alpha', 'value'),
-    State('beta', 'value'),
+    State('power', 'value'),
     State('n_groups', 'value'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'value'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'id'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'data'),
     State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'id')
 )
-def give_n(path, stat_test, alpha, beta, n_groups, test_param_values, test_param_values_ids, test_param_data,
+def give_n(path, stat_test, alpha, power, n_groups, test_param_values, test_param_values_ids, test_param_data,
            test_param_data_ids):
     if path == '/interim-analyses':
-        color, message = TestObject(stat_test).fixed_sample_size(alpha, beta, test_param_values, test_param_values_ids,
-                                                                 test_param_data, test_param_data_ids,
-                                                                 n_groups=n_groups)
+        color, message = TestObject(stat_test).fixed_sample_size(alpha, 1 - power, test_param_values,
+                                                                 test_param_values_ids, test_param_data,
+                                                                 test_param_data_ids, n_groups=n_groups)
         return True, color, message
     raise PreventUpdate
 # endregion
@@ -328,7 +328,7 @@ def create_evaluation(local, memory_limit):
         State('n_groups', 'value'),
         State('sample_sizes', 'derived_viewport_data'),
         State('alpha', 'value'),
-        State('beta', 'value'),
+        State('power', 'value'),
         State('spending', 'value'),
         State('relative-tolerance', 'value'),
         State('CI', 'value'),
@@ -342,7 +342,7 @@ def create_evaluation(local, memory_limit):
         State({'type': 'test parameter', 'name': ALL, 'form': 'value'}, 'id'),
         State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'data'),
         State({'type': 'test parameter', 'name': ALL, 'form': 'datatable'}, 'id'))
-    def check_n_evaluate(n_clicks, n_analyses, n_groups, sample_sizes, alpha, beta, spending, rel_tol, CI, costs,
+    def check_n_evaluate(n_clicks, n_analyses, n_groups, sample_sizes, alpha, power, spending, rel_tol, CI, costs,
                          error_type, taus, error_spending_function, error_spent, stat_test, test_param_values,
                          test_param_values_ids, test_param_data, test_param_data_ids):
         """ Evaluate and simulate the properties of the design
@@ -364,13 +364,13 @@ def create_evaluation(local, memory_limit):
             return 'Please make sure you enter a valid number of experimental groups.', \
                    error_color, True, dash.no_update, dash.no_update
 
-        if alpha is None or beta is None:
-            return 'Please make sure you fill in a probability for the type I and type II error.', \
+        if alpha is None or power is None:
+            return 'Please make sure you fill in a probability for the type I error and the desired power.', \
                    error_color, True, dash.no_update, dash.no_update
-        if (alpha == 1 or alpha == 0) or (beta == 1 or beta == 0):
-            return 'The type I and type II errors should be between 0 and 1, they cannot be equal to 0 or 1. ' + \
+        if (alpha == 1 or alpha == 0) or (power == 1 or power == 0):
+            return 'The type I error and desired power should be between 0 and 1, they cannot be equal to 0 or 1. ' + \
                    'Please check your input', error_color, True, dash.no_update, dash.no_update
-
+        beta = 1 - power
         if rel_tol is None or CI is None:
             return 'Please make sure the simulation precision parameters are filled in.', \
                    error_color, True, dash.no_update, dash.no_update

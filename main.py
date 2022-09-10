@@ -14,8 +14,9 @@ from layout_instructions import spacing_variables as spacing
 
 app = server
 
-BISI_LOGO = '/assets/Logos.svg'
-version = '0.4.' + str(int(open("version.txt", "r").read()))
+BISI_LOGO = '/assets/BISI_NEGATIVE.svg'
+SQUARE_LOGO = '/assets/SQUARE_NEGATIVE.svg'
+version = '1.0.' + str(int(open("version.txt", "r").read()))
 local = False
 memory_limit = 1 - 0.25  # in GigaByte
 
@@ -47,22 +48,27 @@ dash_app.layout = html.Div(children=[navbar.bar, dbc.Container([
     dbc.Row([dbc.Col(lg={'size': 5}, md=8, sm=10, xs=12,
                      children=[dbc.Container(html.A([html.Img(src=BISI_LOGO, alt='BISI Logo', className='img-fluid')],
                                                     href='https://bisi.research.vub.be'), fluid=False),
+                               dbc.Container(html.A([html.Img(src=SQUARE_LOGO, alt='SQUARE Logo', className='img-fluid')],
+                                                    href='https://square.research.vub.be'), fluid=False),
                                html.Br(),
                                'Laarbeeklaan 103, 1090 Jette',
                                html.Br(), 'Brussels, Belgium',
                                html.Br(), html.Br(),
                                html.A('bisi.research.vub.be', href='https://bisi.research.vub.be',
                                       style={'color': '#fff'}),
-                               html.Br(), html.A('icds.be', href='https://icds.be', style={'color': '#fff'})
+                               html.Br(), html.A('square.research.vub.be', href='https://square.research.vub.be',
+                                                 style={'color': '#fff'})
                                ],
                      style={'textAlign': 'center'}),
              dbc.Col(lg={'size': 3, 'offset': 0}, md={'size': 5, 'offset': spacing['offset']}, sm=7,
                      children=[html.Br(),
+                               'Reference: ',
+                               html.A('DOI: 10.1016/j.rvsc.2022.03.003', href='https://doi.org/10.1016/j.rvsc.2022.03.003',
+                                      style={'color': '#fff', 'text-decoration': 'underline'}),
+                               html.Br(), html.Br(),
                                'Code and documentation: ',
                                html.A('Github', href='https://github.com/Susanne-ICDS/gsd-designer',
                                       style={'color': '#fff', 'text-decoration': 'underline'}),
-                               # html.Br(), html.Br(),
-                               # 'Citable publication: Coming soon',
                                html.Br(), html.Br(),
                                'Tutorial: ',
                                html.A('Download',
