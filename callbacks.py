@@ -1,9 +1,9 @@
 import dash
-import dash_table
+from dash import dash_table
 import dash_html_components as html
 from dash.exceptions import PreventUpdate
 from dash.dependencies import Input, Output, State, MATCH, ALL
-from dash_extensions.snippets import send_data_frame, send_bytes
+from dash.dcc import send_data_frame, send_bytes
 import dash_bootstrap_components as dbc
 
 import pandas as pd
@@ -410,40 +410,25 @@ def create_evaluation(local, memory_limit):
                           **test_param_values, **error_spending_param}
         # endregion
 
-        # region Simulate until the confidence interval for relative error is smaller than tolerance level
-        exact_sig, exact_fut, exact_true_neg, exact_power, lower_limit, upper_limit = \
-            TestObject(stat_test).give_exact(sample_sizes, alphas, betas, test_param_values)
-
-        def simulator_h0(n_sim):
-            return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'H0', memory_limit, test_param_values)
-
-        def simulator_ha(n_sim):
-            return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'HA', memory_limit, test_param_values)
-
-        # Name all the properties being simulated
+        # Name all the properties being simulated/calculated
         col_names = ['Model id'] + ['Sig. bound {}'.format(i + 1) for i in range(n_analyses)] + \
                     ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)] + \
                     ['Expected cost H0', 'Expected cost HA'] + \
                     ['Power at analysis {}'.format(i + 1) for i in range(n_analyses)] + \
                     ['Chance of true negative under H0 at analysis {}'.format(i + 1) for i in range(n_analyses)]
 
-        estimates, std_errors, n_simulations, counts = \
-            simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, identify_model['Model id'],
-                            _default_n_repeats, _max_n_repeats, simulator_h0, simulator_ha, costs, exact_true_neg,
-                            exact_power, lower_limit, upper_limit)
-        # endregion
+        # Obtain statistics
+        estimates, std_errors, message_title, message = \
+            TestObject(stat_test).get_statistics(
+                alphas, betas, sample_sizes, rel_tol, CI, col_names, identify_model['Model id'],
+                _default_n_repeats, _max_n_repeats, costs, test_param_values, memory_limit)
 
         estimates = estimates.astype(str)
         std_errors = std_errors.astype(str)
         # The string type-casting is because json serialization does not support infinite values
 
-        counts_str = '{}'.format(counts[col_names[1]][0])
-        for i in range(counts.shape[0] - 1):
-            counts_str += ', ' + '{}'.format(counts[col_names[1]][i])
-
-        return [html.B('Simulations finished: '), 'Results per model based on respectively ' + counts_str +
-                                                  ' estimates with {} simulations each'.format(n_simulations)], \
-            'success', True, identify_model, [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
+        return [html.B(message_title), message], 'success', True, identify_model, \
+               [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
 
 
 @dash_app.callback(

@@ -1,6 +1,6 @@
 import dash_html_components as html
 import dash_bootstrap_components as dbc
-import dash_table
+from dash import dash_table
 from dash.exceptions import PreventUpdate
 
 import pandas as pd
@@ -202,8 +202,8 @@ class NewTest(BasicTest):
         # 'name' values from the ids above. The datatables are stored as numpy arrays
         
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
-        # Simulate the test statistics, return a numpy array with shape (n_simulations, n_analyses)
+    def get_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
+        # Get the test statistics, return a numpy array with shape (n_simulations, n_analyses)
 
         if hypothesis == 'H0':
             return # put your null hypothesis test statistic simulating function here
@@ -297,14 +297,11 @@ class TTest(BasicTest):
         return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
 
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
-        """ Simulate the test statistics """
-
-        if hypothesis == 'H0':
-            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, cohens_d=0,
-                                                        sides=test_parameters['sides'])
-        if hypothesis == 'HA':
-            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, **test_parameters)
+    def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, default_n_repeats,
+                       max_n_repeats, costs, test_parameters, memory_limit):
+        """ Get the test statistics """
+        return t_test_functions.get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids,
+                                                default_n_repeats, max_n_repeats, costs, test_parameters, memory_limit)
 
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):
@@ -397,15 +394,11 @@ class OneWay(BasicTest):
         return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
 
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
-        """ Simulate the test statistics """
-
-        if hypothesis == 'H0':
-            return one_way_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit,
-                                                         means=np.zeros(sample_sizes.shape[0]),
-                                                         sd=test_parameters['sd'])
-        else:
-            return one_way_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, **test_parameters)
+    def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, default_n_repeats,
+                       max_n_repeats, costs, test_parameters, memory_limit):
+        """ Get the test statistics """
+        return one_way_functions.get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids,
+                                                default_n_repeats, max_n_repeats, costs, test_parameters, memory_limit)
 
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):

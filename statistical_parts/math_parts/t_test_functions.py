@@ -4,6 +4,33 @@ from scipy.stats import t
 from scipy.stats import nct
 from scipy.optimize import root_scalar
 
+from statistical_parts.math_parts.error_spending_simulation import simulation_loop
+
+
+def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, default_n_repeats,
+                   max_n_repeats, costs, test_parameters, memory_limit):
+
+    exact_sig, exact_fut, exact_true_neg, exact_power, lower_limit, upper_limit = \
+        give_exact(sample_sizes, alphas, betas, test_parameters['cohens_d'], test_parameters['sides'])
+
+    def simulator_h0(n_sim):
+        return simulate_statistics(n_sim, sample_sizes, memory_limit, cohens_d=0, sides=test_parameters['sides'])
+
+    def simulator_ha(n_sim):
+        return simulate_statistics(n_sim, sample_sizes, memory_limit, cohens_d=test_parameters['cohens_d'],
+                                   sides=test_parameters['sides'])
+
+    estimates, std_errors, n_simulations, counts = simulation_loop(
+        alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, model_ids, default_n_repeats, max_n_repeats,
+        simulator_h0, simulator_ha, costs, exact_true_neg, exact_power, lower_limit, upper_limit)
+
+    counts_str = '{}'.format(counts[col_names[1]][0])
+    for i in range(counts.shape[0] - 1):
+        counts_str += ', ' + '{}'.format(counts[col_names[1]][i])
+
+    return estimates, std_errors, 'Simulations finished: ', 'Results per model based on respectively ' + counts_str + \
+        ' estimates with {} simulations each'.format(n_simulations)
+
 
 def simulate_statistics(n_simulations, sample_sizes, memory_limit, cohens_d, sides):
     """ Simulate test statistics for an independent groups t-test
