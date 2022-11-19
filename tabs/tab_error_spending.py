@@ -13,15 +13,16 @@ layout = html.Div([
 
     html.Br(),
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
-                    children=[label('Which forms of error spending would you like to perform?'),
-                              dcc.Dropdown(id='spending',
-                                           options=[{'label': 'alpha and beta spending', 'value': 'both'},
-                                                    {'label': 'just alpha spending', 'value': 'alpha'},
-                                                    {'label': 'just beta spending', 'value': 'beta'}], value='both'),
+                    children=[label('When would you like to stop early?'),
+                              dcc.Dropdown(id='spending', options=[
+                                  {'label': 'Either if the result is significant or if it is insufficiently promising',
+                                   'value': 'both'},
+                                  {'label': 'Only if the result is significant', 'value': 'alpha'},
+                                  {'label': 'Only if the result is insufficiently promising', 'value': 'beta'}], value='both'),
                               html.Br(),
                               label('How would you like to enter the error spending?'),
                               dbc.RadioItems(id='error_type',
-                                             options=[{'label': 'Use spending functions', 'value': 'IR'},
+                                             options=[{'label': 'Use default spending functions', 'value': 'IR'},
                                                       {'label': 'Enter allowed errors directly', 'value': 'DES'}],
                                              value='IR'),
                               html.Br()

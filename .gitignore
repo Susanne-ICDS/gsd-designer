@@ -13,6 +13,9 @@ venv
 *.yaml
 
 firebase_script.js
+package-lock.json
+/node_modules
+
 app.py
 test_and_timer.py
 test_code.py
