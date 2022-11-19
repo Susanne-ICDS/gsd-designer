@@ -1,5 +1,4 @@
-import dash_html_components as html
-from dash import dash_table
+from dash import dash_table, html, dcc
 import dash_bootstrap_components as dbc
 
 from statistical_parts.statistical_test_objects import test_options, TestObject

@@ -1,4 +1,4 @@
-import dash_html_components as html
+from dash import html, dcc
 import dash_bootstrap_components as dbc
 
 from statistical_parts.statistical_test_objects import test_options, TestObject
@@ -13,9 +13,10 @@ layout = html.Div([
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                     children=[
                         label('Statistical test'),
-                        dbc.Select(id="stat_test",
-                                   options=[item for item in test_options],
-                                   value=test_options[0]["value"])
+                        html.Br(),
+                        dcc.Dropdown(id="stat_test",
+                                     options=[item for item in test_options],
+                                     value=test_options[0]["value"])
                    ])),
 
     html.Br(),

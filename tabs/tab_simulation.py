@@ -1,7 +1,6 @@
-import dash_html_components as html
-import dash_core_components as dcc
+from dash import dcc, html
 import dash_bootstrap_components as dbc
-from dash_core_components import Download
+from dash.dcc import Download
 
 from layout_instructions import spacing_variables as spacing
 from layout_instructions import label, my_jumbo_box, regular_text, table_style

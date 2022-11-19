@@ -1,6 +1,5 @@
-import dash_html_components as html
 import dash_bootstrap_components as dbc
-from dash import dash_table, dcc
+from dash import dash_table, dcc, html
 
 from statistical_parts import error_spending
 

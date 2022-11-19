@@ -1,6 +1,5 @@
 import dash
-from dash import dash_table
-import dash_html_components as html
+from dash import dash_table, html
 from dash.exceptions import PreventUpdate
 from dash.dependencies import Input, Output, State, MATCH, ALL
 from dash.dcc import send_data_frame, send_bytes

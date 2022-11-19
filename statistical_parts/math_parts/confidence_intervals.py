@@ -4,7 +4,7 @@ from scipy.stats import nct, ncf
 import statistical_parts.math_parts.t_test_functions as t_gsd
 import statistical_parts.math_parts.one_way_functions as f_gsd
 
-import dash_html_components as html
+from dash import html
 
 
 """
