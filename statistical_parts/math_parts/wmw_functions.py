@@ -123,7 +123,6 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
         n = get_sim_nr(target_alphas, target_betas, rel_tol)
         sims = simulate_U_stats(n + 100, sample_sizes, cohens_d)
 
-    # define helper functions
     def normal_probability(smaller_than_vals, larger_than_vals, null_hypothesis=True):
         for i_1 in range(n_analyses):
             if larger_than_vals[i_1] != -np.inf:
@@ -143,7 +142,7 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
         else:
             return multivariate_normal.cdf(smaller_than_vals, mean=means_ha, cov=cov_matrix_ha)
 
-    # calculate 1st analysis bounds
+    # region calculate 1st analysis bounds
     here = target_alphas[:, 0] > 10 ** -10
     h0_normal_upper[here, 0] = norm.ppf(1 - target_alphas[here, 0]) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
 
@@ -184,21 +183,24 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
         c_p = fixed_MW_CDF(int(np.floor(lower_bounds[here2, 0])), sample_sizes[0, 0], sample_sizes[0, 1])
         h0_normal_lower[0] = norm.ppf(c_p) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
 
-    done = np.where(lower_bounds + 1 >= upper_bounds)
-    lower_bounds[done] = upper_bounds[done] - 1
+    # endregion
+    # evaluate models that are done
+    done = np.where(lower_bounds[:, 0] + 1 >= upper_bounds[:, 0] )
+    lower_bounds[done, 0] = upper_bounds[done, 0] - 1
 
     if mode == 'marginally exact':
-        c_p = HA_CDF_approximation(np.array([lower_bounds[done]]), sample_sizes[0, 0].reshape(1),
+        c_p = HA_CDF_approximation(np.array([lower_bounds[done, 0]]), sample_sizes[0, 0].reshape(1),
                                    sample_sizes[0, 1].reshape(1), cohens_d, "Min ARE", max_rows=30)
         updated_betas[done, :] = 1 - np.tile(c_p.reshape((-1, 1)), (1, done.size))
     elif mode == 'simulation':
         c_p = np.sum(upper_bounds[np.newaxis, done, 0] <= sims[0, :, np.newaxis], axis=0) / n
         updated_betas[done, :] = 1 - np.tile(c_p.reshape((-1, 1)), (1, done.size))
     else:
-        updated_betas[done, :] = norm.cdf((upper_bounds[done] - means_ha[0])/cov_matrix_ha[0, 0] ** 0.5)
+        updated_betas[done, :] = norm.cdf((upper_bounds[done, 0] - means_ha[0])/cov_matrix_ha[0, 0] ** 0.5)
 
+    not_done = np.where(lower_bounds[:, 0] + 1 < upper_bounds[:, 0])
     for i in np.arange(n_analyses):
-        here = target_alphas[:, i] - updated_alphas[:, i - 1] > 10 ** -10
+        here = target_alphas[not_done, i] - updated_alphas[:, i - 1] > 10 ** -10
 
 
 
