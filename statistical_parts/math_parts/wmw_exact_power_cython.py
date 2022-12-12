@@ -1,6 +1,8 @@
 import cython
 import numpy as np
 
+# TO DO: clean and document this mess.
+# Reduce to 1D case and remove parallel computing possibilities
 
 # region base functions
 @cython.wraparound(False)

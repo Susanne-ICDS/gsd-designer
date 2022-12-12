@@ -1,12 +1,16 @@
 from functools import wraps
-import json
 import numpy as np
-import os
+from statistical_parts.math_parts.wmw_exact_power import min_are_quantile
 import cython
-import numbers
 import sys
 
+# TO DO: document this
 sys.setrecursionlimit(2000)
+
+
+@cython.locals(ks=cython.int[:], m=cython.int, n=cython.int)
+def vect_MW_CDF(ks, m, n):
+    return np.array([fixed_MW_CDF(k, m, n) for k in ks])
 
 
 @cython.locals(k=cython.int, m=cython.int, n=cython.int)
@@ -19,7 +23,7 @@ def fixed_MW_CDF(k, m, n):
     elif k < m*n/2:
         result = 0
         t = comb(m+n, n)
-        for i in range(k):
+        for i in range(k + 1):
             result += n_partition(i, m, n)/t
     else:
         result = 1
@@ -31,6 +35,8 @@ def fixed_MW_CDF(k, m, n):
 
 
 def cached(func):
+    func.cache = {}
+
     @wraps(func)
     def wrapper(*args):
         try:
@@ -103,5 +109,64 @@ def comb(n, k):
     return result
 
 
+@cython.cfunc
+@cython.returns(cython.int[:, :])
+@cython.locals(group1_data=cython.double[:, :], group2_data=cython.double[:, :], ns=cython.int[:, :])
+def U_statistics_intern(group1_data, group2_data, ns):
+    # c function, cannot be imported to another python script
+    n_analyses: cython.int
+    n_sims: cython.int
+    i: cython.int
+    j: cython.int
+    k: cython.int
+    s: cython.int
+    us: cython.int[:, :]
 
+    n_analyses = ns.shape[0]
+    n_sims = group1_data.shape[1]
+
+    us = np.zeros((n_analyses, n_sims), dtype=int)
+
+    for j in range(ns[0, 0]):
+        for k in range(ns[0, 1]):
+            for s in range(n_sims):
+                us[0, s] = us[0, s] + int(group1_data[j, s] > group2_data[k, s])
+
+    for i in range(n_analyses-1):
+        for j in np.arange(ns[i, 0], ns[i + 1, 0]):
+            for k in range(ns[i, 1]):
+                for s in range(n_sims):
+                    us[i + 1, s] = us[i + 1, s] + int(group1_data[j, s] > group2_data[k, s])
+
+        for j in range(ns[i + 1, 0]):
+            for k in np.arange(ns[i, 1], ns[i + 1, 1]):
+                for s in range(n_sims):
+                    us[i + 1, s] = us[i + 1, s] + int(group1_data[j, s] > group2_data[k, s])
+
+    us = np.cumsum(us, axis=0)
+    return us
+
+
+def U_stats(group1_data, group2_data, ns):
+    # python function, can be imported to another python script
+    return U_statistics_intern(group1_data, group2_data, ns)
+
+
+def simulate_U_stats(n, sample_sizes, cohens_d, pdf='Min ARE'):
+    group1_data, group2_data = base_simulator(n, sample_sizes, pdf)
+    return U_statistics_intern(group1_data + cohens_d, group2_data, sample_sizes)
+
+
+def base_simulator(n, sample_sizes, pdf):
+    if pdf == 'Normal':
+        return np.random.normal(size=n * sample_sizes[-1, 0]).reshape(sample_sizes[-1, 0], n), \
+            np.random.normal(size=n * sample_sizes[-1, 1]).reshape(sample_sizes[-1, 1], n)
+    elif pdf == 'Uniform':
+        return np.random.uniform(size=n * sample_sizes[-1, 0]).reshape(sample_sizes[-1, 0], n), \
+               np.random.uniform(size=n * sample_sizes[-1, 1]).reshape(sample_sizes[-1, 1], n)
+    elif pdf == 'Min ARE':
+        return min_are_quantile(np.random.uniform(size=n * sample_sizes[-1, 0]).reshape(sample_sizes[-1, 0], n)), \
+               min_are_quantile(np.random.uniform(size=n * sample_sizes[-1, 1]).reshape(sample_sizes[-1, 1], n))
+    else:
+        raise ValueError('pdf base simulator not implemented')
 

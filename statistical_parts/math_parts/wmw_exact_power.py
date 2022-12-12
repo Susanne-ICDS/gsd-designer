@@ -1,5 +1,5 @@
 import numpy as np
-from wmw_exact_power_cython import HA_CDF_matrix
+from statistical_parts.math_parts.wmw_exact_power_cython import HA_CDF_matrix
 from scipy.stats import norm
 from scipy.optimize import root_scalar
 import multiprocessing as mp
@@ -41,6 +41,142 @@ def clean_input(ks, ns, ms, sig_is_upper):
         rel_ks = np.all(ks >= 0, axis=1)
 
     return ks, ns, ms, rel_ks
+
+
+def HA_all_sig_approximation(ks, ns, ms, shift, pdf, combinations=None, int_range=None, max_rows=6, tol=10 ** -5,
+                             max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False,
+                             sig_is_upper=False):
+
+    ks, ns, ms, rel_ks = clean_input(ks, ns, ms, sig_is_upper)
+    a = np.zeros(ks.shape[0]).tolist()
+    if len(ks.shape) == 1:
+        n_ks = 1
+        if not rel_ks:
+            if return_intermediate:
+                return [0, 0]
+            return 0
+
+    else:
+        n_ks = ks.shape[0]
+        if not np.any(rel_ks):
+            if return_intermediate:
+                return [a, a]
+            return a
+
+    a = np.zeros(n_ks).tolist()
+
+    if combinations is not None:
+        rel_combos = np.array([np.any(combo * rel_ks) for combo in combinations])
+        combos = []
+        for i, combo in enumerate(combinations):
+            if rel_combos[i]:
+                combos.append(combo[rel_ks])
+    else:
+        combos = None
+
+    if return_intermediate:
+        results, intermediates = \
+            HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
+                         manager, max_parallel, return_intermediate, tol_type='absolute', combinations=combos)
+        if n_ks == 1:
+            return results, intermediates
+        b = a.copy()
+        for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
+            if sig_is_upper:
+                a[-j] = results[i]
+                b[-j] = intermediates[i]
+            else:
+                a[j] = results[i]
+                b[j] = intermediates[i]
+
+        return a, b
+    results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
+                           manager, max_parallel, return_intermediate, tol_type='absolute', combinations=combos)
+    if n_ks == 1:
+        return results
+    for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
+        if sig_is_upper:
+            a[-j] = results[i]
+        else:
+            a[j] = results[i]
+
+    return a
+
+
+def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, int_range=None, max_rows=6, tol=10**-5,
+                max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False,
+                solution="underpowered", sig_is_upper=False):
+    ks, ns, ms, rel_ks = clean_input(ks, ns, ms, sig_is_upper)
+    a = np.zeros(ks.shape[0]).tolist()
+    if len(ks.shape) == 1:
+        n_ks = 1
+        if not rel_ks:
+            if return_intermediate:
+                return [0, 0]
+            return 0
+
+    else:
+        n_ks = ks.shape[0]
+        if not np.any(rel_ks):
+            if return_intermediate:
+                return [a, a]
+            return a
+
+    a = np.zeros(n_ks).tolist()
+
+    if combinations is not None:
+        rel_combos = np.array([np.any(combo * rel_ks) for combo in combinations])
+        combos = []
+        for i, combo in enumerate(combinations):
+            if rel_combos[i]:
+                combos.append(combo[rel_ks])
+    else:
+        rel_combos = True
+        combos = None
+
+    if return_intermediate:
+        intermediates, results = \
+            HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
+                         manager, max_parallel, return_intermediate, tol_type='relative',
+                         ref_value=required_power[rel_combos], combinations=combos, solution=solution)
+
+        for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
+            if sig_is_upper:
+                a[-j] = results[i]
+            else:
+                a[j] = results[i]
+
+        return intermediates, a
+
+    results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson, manager,
+                           max_parallel, return_intermediate, tol_type='relative', ref_value=required_power[rel_combos],
+                           combinations=combos, solution=solution)
+
+    for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
+        if sig_is_upper:
+            a[-j] = results[i]
+        else:
+            a[j] = results[i]
+    return a
+
+
+def HA_CDF_approximation(ks, ns, ms, shift, pdf, combinations=None, int_range=None, max_rows=6, tol=10**-5,
+                         max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False):
+    return HA_all_sig_approximation(ks, ms, ns, -shift, pdf, combinations, int_range, max_rows, tol, max_iter,
+                                    max_richardson, manager, max_parallel, return_intermediate, sig_is_upper=False)
+
+
+def check_TypeII(ks, ns, ms, shift, pdf, ref_val, combinations=None, int_range=None, max_rows=6, tol=10**-5,
+                 max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False,
+                 solution="lower"):
+    if solution == "lower":
+        solution = "underpowered"
+    elif solution == "higher":
+        solution = "overpowered"
+    return check_power(ks, ms, ns, -shift, pdf, ref_val, combinations=combinations, int_range=int_range,
+                       max_rows=max_rows, tol=tol, max_iter=max_iter, max_richardson=max_richardson, manager=manager,
+                       max_parallel=max_parallel, return_intermediate=return_intermediate, solution=solution,
+                       sig_is_upper=False)
 
 
 # noinspection PyTypeChecker
@@ -197,22 +333,28 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
         elif tol_type == 'relative' and solution is not None:
             for i_1 in not_yet_converged:
                 result = iteration_results[i_1]
-                if np.abs(result[len(result) - 1] - ref_value) < tol_multiplier * tol < error_est_results[i_1]:
+                if np.any(np.abs(result[len(result) - 1] - ref_value) < tol_multiplier * tol) and \
+                        tol_multiplier * tol < error_est_results[i_1]:
                     still_not_converged.append(i_1)
-            under = -1
-            for i_1 in range(n_ks):
-                if iteration_results[i_1][len(iteration_results[i_1]) - 1] < ref_value:
-                    under += 1
+
+            if type(ref_value) != np.ndarray:
+                ref_value = np.array(ref_value)
+
+            for val in ref_value:
+                under = -1
+                for i_1 in range(n_ks):
+                    if iteration_results[i_1][len(iteration_results[i_1]) - 1] < val:
+                        under += 1
+                    else:
+                        break
+                if under == -1 or under == n_ks - 1:
+                    pass
+                elif solution == "underpowered":
+                    if tol_multiplier * tol < error_est_results[under]:
+                        still_not_converged.append(under)
                 else:
-                    break
-            if under == -1 or under == n_ks - 1:
-                pass
-            elif solution == "underpowered":
-                if tol_multiplier * tol < error_est_results[under]:
-                    still_not_converged.append(under)
-            else:
-                if tol_multiplier * tol < error_est_results[under + 1]:
-                    still_not_converged.append(under + 1)
+                    if tol_multiplier * tol < error_est_results[under + 1]:
+                        still_not_converged.append(under + 1)
         elif tol_type == 'absolute':
             for i_1 in not_yet_converged:
                 if tol_multiplier * tol < error_est_results[i_1]:
@@ -220,6 +362,7 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
         still_not_converged = np.unique(still_not_converged).tolist()
         return still_not_converged
     # region only relevant when performing the next integration in parallel
+
     if manager is None:
         max_parallel = 0
     if max_parallel != 0:
