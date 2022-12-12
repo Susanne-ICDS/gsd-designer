@@ -130,15 +130,16 @@ def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, int_r
         for i, combo in enumerate(combinations):
             if rel_combos[i]:
                 combos.append(combo[rel_ks])
+        ref_value = required_power[rel_combos]
     else:
-        rel_combos = True
+        ref_value = required_power
         combos = None
 
     if return_intermediate:
         intermediates, results = \
             HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
                          manager, max_parallel, return_intermediate, tol_type='relative',
-                         ref_value=required_power[rel_combos], combinations=combos, solution=solution)
+                         ref_value=ref_value, combinations=combos, solution=solution)
 
         for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
             if sig_is_upper:
@@ -149,7 +150,7 @@ def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, int_r
         return intermediates, a
 
     results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson, manager,
-                           max_parallel, return_intermediate, tol_type='relative', ref_value=required_power[rel_combos],
+                           max_parallel, return_intermediate, tol_type='relative', ref_value=ref_value,
                            combinations=combos, solution=solution)
 
     for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
@@ -183,6 +184,9 @@ def check_TypeII(ks, ns, ms, shift, pdf, ref_val, combinations=None, int_range=N
 def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -5, max_iter=15,
                  max_richardson=10, manager=None, max_parallel=0, return_intermediate=False, tol_type='absolute',
                  ref_value=None, combinations=None, solution=None):
+    if ref_value is not None and type(ref_value) != np.ndarray:
+        ref_value = np.array(ref_value)
+
     if not (type(ns) == type(ms) == np.ndarray):
         raise TypeError("All input except max_rows should be of type numpy array.")
     if ns.shape != ms.shape or len(ns.shape) != 1:
@@ -237,23 +241,6 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
     # make sure there are sufficient interval pieces for the error caused by max_rows to be O(h^2) and also h <= 1
     max_rows = min(n + m, max_rows)
     c_exp = np.ceil(np.log2(max(((n + m) / max_rows), interval_length * 2)))
-
-    def iterate(outcome_list, ks_now, fs, gs, h):
-        outcome_list[:] = HA_CDF_matrix(ks_now, ns, ms, fs, gs, h, max_rows)
-        return outcome_list
-
-    def Richardson_expansion(result_list, not_yet_converged, new_elements, error_estimates):
-        for i_1, i_2 in enumerate(not_yet_converged):
-            old_array = result_list[i_2]
-            old_len = len(result_list[i_2])
-            new_len = min(old_len + 1, max_richardson)
-            new_array = np.zeros(new_len)
-            new_array[0] = new_elements[i_1]
-            for i_3 in range(new_len - 1):
-                new_array[i_3 + 1] = new_array[i_3] + (new_array[i_3] - old_array[i_3]) / (4 ** (i_3 + 1) - 1)
-            error_estimates[i_2] = np.abs(new_array[old_len - 1] - old_array[old_len - 1])
-            result_list[i_2] = new_array
-        return result_list, error_estimates
 
     def check_done(not_yet_converged):
         still_not_converged = []
@@ -337,9 +324,6 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
                         tol_multiplier * tol < error_est_results[i_1]:
                     still_not_converged.append(i_1)
 
-            if type(ref_value) != np.ndarray:
-                ref_value = np.array(ref_value)
-
             for val in ref_value:
                 under = -1
                 for i_1 in range(n_ks):
@@ -361,6 +345,24 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
                     still_not_converged.append(i_1)
         still_not_converged = np.unique(still_not_converged).tolist()
         return still_not_converged
+
+    def iterate(outcome_list, ks_now, fs, gs, h):
+        outcome_list[:] = HA_CDF_matrix(ks_now, ns, ms, fs, gs, h, max_rows)
+        return outcome_list
+
+    def Richardson_expansion(result_list, not_yet_converged, new_elements, error_estimates):
+        for i_1, i_2 in enumerate(not_yet_converged):
+            old_array = result_list[i_2]
+            old_len = len(result_list[i_2])
+            new_len = min(old_len + 1, max_richardson)
+            new_array = np.zeros(new_len)
+            new_array[0] = new_elements[i_1]
+            for i_3 in range(new_len - 1):
+                new_array[i_3 + 1] = new_array[i_3] + (new_array[i_3] - old_array[i_3]) / (4 ** (i_3 + 1) - 1)
+            error_estimates[i_2] = np.abs(new_array[old_len - 1] - old_array[old_len - 1])
+            result_list[i_2] = new_array
+        return result_list, error_estimates
+
     # region only relevant when performing the next integration in parallel
 
     if manager is None:

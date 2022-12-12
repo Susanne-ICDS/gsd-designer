@@ -89,7 +89,7 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
     n_models = target_alphas.shape[0]
 
     upper_bounds = np.tile(prod_ss + 1, (n_models, 1))
-    lower_bounds = - np.ones((n_models, n_analyses))
+    lower_bounds = - np.ones((n_models, n_analyses), dtype=int)
 
     h0_normal_upper = np.inf * np.ones((n_models, n_analyses))
     h0_normal_lower = -np.inf * np.ones((n_models, n_analyses))
@@ -148,216 +148,61 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
     h0_normal_upper[here, 0] = norm.ppf(1 - target_alphas[here, 0]) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
 
     if mode != 'normal':
-        upper_bounds[here, 0], updated_alphas[here, 0] = transform_h0(0, target_alphas[here, 0],
-                                                                      h0_normal_upper[here, 0])
+        upper_bounds[here, 0], updated_alphas[here, 0] = \
+            transform_h0(sample_sizes[0, 0], sample_sizes[0, 1], 1-target_alphas[here, 0],
+                         np.ceil(h0_normal_upper[here, 0]).astype(int))
         h0_normal_upper[here, 0] = norm.ppf(1 - updated_alphas[here, 0]) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
     else:
-        upper_bounds[here, 0] = h0_normal_upper[here, 0]
+        upper_bounds[here, 0] = np.ceil(h0_normal_upper[here, 0]).astype(int)
 
-    if updated_betas[0] > 10 ** -10:
-        ha_normal_lower[0] = norm.ppf(target_betas[0]) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
+    here2 = target_betas[:, 0] > 10 ** -10
+    if mode == 'marginally exact':
+        ha_normal_lower[here2, 0] = norm.ppf(target_betas[here2, 0]) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
 
-        if mode == 'marginally exact':
-            lower_bounds[0], updated_betas[0] = transform_ha(0, target_betas[0], ha_normal_lower[0])
-            ha_normal_lower[0] = norm.ppf(updated_betas[0]) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
+        lower_bounds[here2, 0], updated_betas[here2, 0] = \
+            transform_ha(sample_sizes[0, 0], sample_sizes[0, 1], target_betas[here2, 0],
+                         np.floor(ha_normal_lower[here2, 0]).astype(int), cohens_d)
+        ha_normal_lower[here2, 0] = norm.ppf(updated_betas[here2, 0]) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
 
-            c_p = HA_CDF_approximation(np.array([upper_bounds[0]]), sample_sizes[0, 0].reshape(1),
-                                       sample_sizes[0, 1].reshape(1), cohens_d, "Min ARE", max_rows=30)
-            ha_normal_upper[0] = norm.ppf(c_p) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
-        elif mode == 'simulation':
-            pass
-        else:
-            lower_bounds[0] = ha_normal_lower[0]
+        c_p = HA_CDF_approximation(np.array([upper_bounds[here, 0]]), sample_sizes[0, 0].reshape(1),
+                                   sample_sizes[0, 1].reshape(1), cohens_d, "Min ARE", max_rows=30)
+        ha_normal_upper[here, 0] = norm.ppf(c_p) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
 
-        if mode != 'normal':
-            c_p = fixed_MW_CDF(int(np.floor(lower_bounds[0])), sample_sizes[0, 0], sample_sizes[0, 1])
-            h0_normal_lower[0] = norm.ppf(c_p) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
+    elif mode == 'simulation':
+        for i in range(n_models):
+            if target_betas[i, 0] > 10 ** -10:
+                lower_bounds[i, 0] = np.round(np.quantile(np.array(sims[0, :]), target_betas[i, 0])) + 1
+                updated_betas[i, 0] = np.sum(lower_bounds[i, 0] >= sims[0, :]) / n
 
-    # new_normal = norm.ppf(new_beta) * cov_matrix_ha[analysis, analysis] ** 0.5 + means_ha[analysis]
-    # c_p = fixed_MW_CDF(int(np.floor(lower_bounds[analysis])), sample_sizes[analysis, 0], sample_sizes[analysis, 1])
-    # h0_normal_lower[analysis] = norm.ppf(c_p) * cov_matrix_h0[analysis, analysis] ** 0.5 + means_h0[analysis]
-    # c_p = HA_CDF_approximation(np.array([up]), sample_sizes[analysis, 0].reshape(1),
-    #                            sample_sizes[analysis, 1].reshape(1), cohens_d, pdf, max_rows=30)
-    # ha_normal_upper[analysis] = norm.ppf(c_p) * cov_matrix_ha[analysis, analysis] ** 0.5 + means_ha[analysis]
+        c_p = np.sum(upper_bounds[np.newaxis, here, 0] <= sims[0, :, np.newaxis], axis=0) / n
+        ha_normal_upper[here, 0] = norm.ppf(c_p) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
+    else:
+        ha_normal_lower[here2, 0] = norm.ppf(target_betas[here2, 0]) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
+        lower_bounds[here2, 0] = np.floor(ha_normal_lower[here2, 0]).astype(int)
 
-    def MWW_determine_bounds(sample_sizes, target_alphas, target_betas, cohens_d, pdf='Min ARE', transform_fut=True,
-                             prev_obtained_upper=None, prev_obtained_lower=None, as_guess=False, alt_update=True,
-                             fut_conservative=True):
+    if mode != 'normal':
+        c_p = fixed_MW_CDF(int(np.floor(lower_bounds[here2, 0])), sample_sizes[0, 0], sample_sizes[0, 1])
+        h0_normal_lower[0] = norm.ppf(c_p) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
+
+    done = np.where(lower_bounds + 1 >= upper_bounds)
+    lower_bounds[done] = upper_bounds[done] - 1
+
+    if mode == 'marginally exact':
+        c_p = HA_CDF_approximation(np.array([lower_bounds[done]]), sample_sizes[0, 0].reshape(1),
+                                   sample_sizes[0, 1].reshape(1), cohens_d, "Min ARE", max_rows=30)
+        updated_betas[done, :] = 1 - np.tile(c_p.reshape((-1, 1)), (1, done.size))
+    elif mode == 'simulation':
+        c_p = np.sum(upper_bounds[np.newaxis, done, 0] <= sims[0, :, np.newaxis], axis=0) / n
+        updated_betas[done, :] = 1 - np.tile(c_p.reshape((-1, 1)), (1, done.size))
+    else:
+        updated_betas[done, :] = norm.cdf((upper_bounds[done] - means_ha[0])/cov_matrix_ha[0, 0] ** 0.5)
+
+    for i in np.arange(n_analyses):
+        here = target_alphas[:, i] - updated_alphas[:, i - 1] > 10 ** -10
 
 
-        if prev_obtained_lower is None:
-            start = 1
 
-        else:
-            start2 = prev_obtained_upper.shape[0]
-            lower_bounds[:start2] = prev_obtained_lower
-            start = min(start, start2)
-
-        if n_analyses == 1 or upper_bounds[0] <= np.floor(lower_bounds[0]) + 1:
-            powered = upper_bounds[0] <= np.floor(lower_bounds[0]) + 1
-            if as_guess:
-                return upper_bounds, lower_bounds, powered
-            lower_bounds[0] = upper_bounds[0] - 1
-            return upper_bounds, lower_bounds, powered
-
-        update_alt_normal(0)
-
-        for i in np.arange(start, n_analyses, 1):
-            if target_alphas[i] > updated_alphas[i - 1] + 10 ** -10:
-
-                def find_this_h0(t):
-                    if alt_update:
-                        suggested = h0_normal_lower
-                    else:
-                        suggested = normal_lower.copy()
-                    suggested[i] = t
-                    p = probability(normal_upper, suggested, True)
-                    return target_alphas[i] - updated_alphas[i - 1] - p
-
-                guess1 = norm.ppf(1 - updated_alphas[i]) * cov_matrix_h0[i, i] ** 0.5 + means_h0[i]
-                now = find_this_h0(guess1)
-                flag = True
-                okay = False
-                if np.abs(now) < 10 ** -5:
-                    new_u = guess1
-                    flag = False
-                    okay = True
-                elif now < 10 ** -5:
-                    guess2 = 2 * guess1 + 1
-                    for _ in range(20):
-                        now = find_this_h0(guess2)
-                        if np.abs(now) < 10 ** -5:
-                            new_u = guess1
-                            flag = False
-                            okay = True
-                            break
-                        elif now > 10 ** -5:
-                            okay = True
-                            break
-                        guess1 = guess2
-                        guess2 *= 2
-                else:
-                    guess2 = guess1 - 1
-                    for _ in range(20):
-                        now = find_this_h0(guess2)
-                        if np.abs(now) < 10 ** -5:
-                            new_u = guess1
-                            flag = False
-                            okay = True
-                            break
-                        elif now < -10 ** -5:
-                            okay = True
-                            break
-                        new_dif = 2 * (guess1 - guess2)
-                        guess1 = guess2
-                        guess2 -= new_dif
-                if okay:
-                    if flag:
-                        new_u = root_scalar(find_this_h0, bracket=[guess1, guess2]).root
-                else:
-                    if guess2 > 0:
-                        new_u = np.inf
-                    else:
-                        new_u = -np.inf
-
-                if new_u == - np.inf:
-                    upper_bounds[i] = - 1
-                elif new_u == np.inf:
-                    pass
-                else:
-                    alpha_1D = 1 - norm.cdf((new_u - means_h0[i]) / cov_matrix_h0[i, i] ** 0.5)
-                    upper_bounds[i], new_u = transform_h0(i, alpha_1D)
-                    updated_alphas[i] = updated_alphas[i] - find_this_h0(new_u)
-            else:
-                new_u = np.inf
-
-            if target_betas[i] > updated_betas[i - 1] + 10 ** -10:
-                def find_this_ha(t):
-                    if alt_update:
-                        suggested = ha_normal_upper
-                    else:
-                        suggested = normal_upper.copy()
-                    suggested[i] = t
-                    p = probability(suggested, normal_lower, False)
-                    return target_betas[i] - updated_betas[i - 1] - p
-
-                guess1 = norm.ppf(updated_betas[i]) * cov_matrix_ha[i, i] ** 0.5 + means_ha[i]
-                now = find_this_ha(guess1)
-                okay = False
-                flag = True
-                if np.abs(now) < 10 ** -5:
-                    new_l = guess1
-                    flag = False
-                    okay = True
-                elif now > 0:
-                    guess2 = 2 * guess1 + 1
-                    for _ in range(20):
-                        now = find_this_ha(guess2)
-                        if np.abs(now) < 10 ** -5:
-                            new_l = guess1
-                            flag = False
-                            okay = True
-                        elif now < 0:
-                            okay = True
-                            break
-                        guess1 = guess2
-                        guess2 *= 2
-                else:
-                    guess2 = guess1 - 1
-                    okay = False
-                    for _ in range(20):
-                        now = find_this_ha(guess2)
-                        if np.abs(now) < 10 ** -5:
-                            new_l = guess1
-                            flag = False
-                            okay = True
-                        elif now > 0:
-                            okay = True
-                            break
-                        new_dif = 2 * (guess1 - guess2)
-                        guess1 = guess2
-                        guess2 -= new_dif
-                if okay:
-                    if flag:
-                        new_l = root_scalar(find_this_ha, bracket=[guess1, guess2]).root
-                else:
-                    if guess2 > 0:
-                        new_l = np.inf
-                    else:
-                        new_l = -np.inf
-                if transform_fut:
-                    beta_1D = norm.cdf((new_l - means_ha[i]) / cov_matrix_ha[i, i] ** 0.5)
-                    if new_l == -np.inf:
-                        lower_bounds[i] = new_l = -1
-                    elif new_l == np.inf:
-                        lower_bounds[i] = new_l = prod_ss[i]
-                    else:
-                        lower_bounds[i], new_l = transform_ha(i, beta_1D, int(new_l))
-                    updated_betas[i] = updated_betas[i] - find_this_ha(new_l)
-                else:
-                    lower_bounds[i] = new_l
-            else:
-                new_l = -np.inf
-
-            normal_upper[i] = new_u
-            normal_lower[i] = new_l
-
-            if i == n_analyses - 1:
-                powered = upper_bounds[i] <= lower_bounds[i] + 1
-                if as_guess:
-                    return upper_bounds, lower_bounds, powered
-                lower_bounds[i] = upper_bounds[i] - 1
-                return upper_bounds, lower_bounds, powered
-            elif alt_update:
-                update_alt_normal(i)
-
-            if upper_bounds[i] <= lower_bounds[i] + 1:
-                if as_guess:
-                    return upper_bounds, lower_bounds, upper_bounds[i] <= prod_ss[i]
-                lower_bounds[i] = upper_bounds[i] - 1
-                return upper_bounds, lower_bounds, upper_bounds[i] <= prod_ss[i]
-
-    return []
+    return upper_bounds, lower_bounds, updated_betas
 
 # region Normal not adapted
 
@@ -486,6 +331,8 @@ def get_p_equivalent(x, N):
 
 # endregion
 # region help functions, no interaction with other files
+
+
 def determine_p0_2(cohens_d, pdf='Min ARE'):
     # function to determine
     # p0; the probability that one sample from the first group is larger than one from the second
@@ -555,50 +402,83 @@ def transform_h0(n1, n2, marginal_alphas, normal_guesses):
     return u_1, p_1
 
 
-def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d):
+def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d, tol=10**-5):
     # it is more efficient to check a few values at once, because of shared caching within the iteration
-    guesses = np.ones((3, 1), dtype=int) * np.median(normal_guesses)
+    n_guesses = 3
+    guesses = np.ones((n_guesses, 1), dtype=int) * np.median(normal_guesses)
     guesses[0] -= 1
     guesses[2] += 1
-    old_guess = None
 
-    for _ in range(n1*n2 + 1):
-        # evaluate guesses, if it is clear the solution is contained within the guesses, automatically continues
-        # iterating to desired precision level
+    n_vals = marginal_betas.size
+    result_crit = np.ones(n_vals)
+    result_ps = np.ones(n_vals)
+
+    results = check_TypeII(guesses, np.array(n1).reshape(1), np.array(n2).reshape(1),
+                           cohens_d, "Min ARE", marginal_betas, max_rows=30, solution="lower", tol=tol)
+    too_high = []
+    too_low = []
+
+    for i in range(n_vals):
+        if np.any(np.abs(marginal_betas[i] - results) <= tol * marginal_betas[i]):
+
+            result_crit[i] = guesses[np.abs(marginal_betas[i] - results) <= tol * marginal_betas[i]][-1]
+            result_ps[i] = results[np.abs(marginal_betas[i] - results) <= tol * marginal_betas[i]][-1]
+        elif np.any(results <= marginal_betas[i] + tol * marginal_betas[i]) and \
+                np.any(results > marginal_betas[i] - tol * marginal_betas[i]):
+
+            result_crit[i] = guesses[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
+            result_ps[i] = results[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
+        elif np.all(results > marginal_betas[i] + tol * marginal_betas[i]):
+            too_high.append(i)
+        else:
+            too_low.append(i)
+
+    guess_h = guesses.copy()
+    while too_high:
+        guess_h -= n_guesses
+        results = check_TypeII(guess_h, np.array(n1).reshape(1), np.array(n2).reshape(1),
+                               cohens_d, "Min ARE", marginal_betas[too_high], max_rows=30, solution="lower", tol=tol)
+        for i in too_high:
+            if np.any(np.abs(marginal_betas[i] - results) <= tol * marginal_betas[i]):
+                result_crit[i] = guesses[np.abs(marginal_betas[i] - results) < tol * marginal_betas[i]][-1]
+                result_ps[i] = results[np.abs(marginal_betas[i] - results) < tol * marginal_betas[i]][-1]
+
+                too_high.remove(i)
+            elif results[-1] <= marginal_betas[i] + tol * marginal_betas[i]:
+                result_crit[i] = guesses[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
+                result_ps[i] = HA_CDF_approximation(result_crit[i], np.array(n1).reshape(1), np.array(n2).reshape(1),
+                                                    cohens_d, "Min ARE", max_rows=30, tol=tol)
+
+                too_high.remove(i)
+            elif np.any(results <= marginal_betas[i] + tol * marginal_betas[i]):
+                result_crit[i] = guesses[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
+                result_ps[i] = results[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
+
+                too_high.remove(i)
+    guess_h = guesses[0]
+    while too_low:
+        guesses -= n_guesses
         results = check_TypeII(guesses, np.array(n1).reshape(1), np.array(n2).reshape(1),
-                                cohens_d, "Min ARE", marginal_betas, max_rows=30, solution="lower")
-            results = np.array(results)
+                               cohens_d, "Min ARE", marginal_betas[too_low], max_rows=30, solution="lower", tol=tol)
 
-            if np.any(results <= marginal_beta) and np.any(results > marginal_beta):
-                # solution found
-                new_lower = guesses[results <= marginal_beta][-1]
-                new_beta = results[results <= marginal_beta][-1]
-                return new_lower, new_beta
-            elif results[0] <= marginal_beta:
-                if old_guess is None or old_guess < guesses[0]:
-                    # check larger guesses
-                    old_guess = guesses[2]
-                    guesses += 3
-                else:
-                    # turns out the solution was in the previous guesses. Now we still need to get the marginal beta at
-                    # the desired precision level
-                    new_lower = guesses[2]
-                    new_beta = HA_CDF_approximation(new_lower, sample_sizes[analysis, 0].reshape(1),
-                                                    sample_sizes[analysis, 1].reshape(1), cohens_d, "Min ARE",
-                                                    max_rows=30)
-                    return new_lower, new_beta
-            else:
-                if old_guess is None or old_guess > guesses[0]:
-                    # check smaller guesses
-                    old_guess = guesses[0]
-                    guesses -= 3
-                else:
-                    # turns out the solution was in the previous guesses. Now we still need to get the marginal beta at
-                    # the desired precision level
-                    new_lower = old_guess
-                    new_beta = HA_CDF_approximation(new_lower, sample_sizes[analysis, 0].reshape(1),
-                                                    sample_sizes[analysis, 1].reshape(1), cohens_d, "Min ARE",
-                                                    max_rows=30)
-                    return new_lower, new_beta
+        for i in too_low:
+            if np.any(np.abs(marginal_betas[i] - results) <= tol * marginal_betas[i]):
+                result_crit[i] = guesses[np.abs(marginal_betas[i] - results) < tol * marginal_betas[i]][-1]
+                result_ps[i] = results[np.abs(marginal_betas[i] - results) < tol * marginal_betas[i]][-1]
+
+                too_low.remove(i)
+            elif results[0] > marginal_betas[i] - tol * marginal_betas[i]:
+                result_crit[i] = guess_h
+                result_ps[i] = HA_CDF_approximation(guess_h, np.array(n1).reshape(1), np.array(n2).reshape(1),
+                                                    cohens_d, "Min ARE", max_rows=30, tol=tol)
+
+                too_low.remove(i)
+            elif np.any(results > marginal_betas[i] - tol * marginal_betas[i]):
+                result_crit[i] = guesses[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
+                result_ps[i] = results[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
+
+                too_low.remove(i)
+
+    return result_crit, result_ps
 
 # endregion
