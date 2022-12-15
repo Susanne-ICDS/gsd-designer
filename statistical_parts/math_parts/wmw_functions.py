@@ -13,9 +13,11 @@ from statistical_parts.math_parts.wmw_exact_power import check_TypeII, HA_CDF_ap
 example 
 
 sample_sizes = np.array([(3, 3), (4, 4), (5, 5)])
-target_alphas = np.array([(0, 0.1, 0.15), (0.05, 0.1, 0.15), (0.05, 0.1, 0.15), (0.2, 0.3, 0.4)])
-target_betas = np.array([(0.1, 0.2, 0.3), (0, 0.2, 0.3), (0.1, 0.2, 0.3), (0.1, 0.2, 0.3)])
-cohens_d = 1.5
+target_alphas = np.array([(0, 0.1, 0.15), (0.05, 0.1, 0.15), (0.05, 0.1, 0.15), (0.2, 0.3, 0.4), (0, 0, 0.05),
+        (0.01, 0.02, 0.03)])
+target_betas = np.array([(0.1, 0.2, 0.3), (0, 0.2, 0.3), (0.1, 0.2, 0.3), (0.1, 0.2, 0.3), (0, 0, 0.2), 
+        (0.15, 0.18, 0.2)])
+cohens_d = 2
 mode = 'marginally exact'
 
 col_names=['1', '2', '3', '4']
@@ -116,6 +118,9 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
     if mode == 'normal':
         updated_alphas = target_alphas
         updated_betas = target_betas
+    elif mode == 'normal power':
+        updated_alphas = np.zeros((n_models, n_analyses))
+        updated_betas = target_betas
     else:
         updated_alphas = np.zeros((n_models, n_analyses))
         updated_betas = np.zeros((n_models, n_analyses))
@@ -205,7 +210,11 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
 
     else:
         ha_normal_lower[here2, 0] = norm.ppf(target_betas[here2, 0]) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
+        h0_normal_lower[here2, 0] = ha_normal_lower[here2, 0]
         lower_bounds[here2, 0] = np.floor(ha_normal_lower[here2, 0]).astype(int)
+
+        if np.any(here):
+            ha_normal_upper[here, 0] = h0_normal_upper[here, 0]
 
     if mode != 'normal' and np.any(here2):
         c_p = vect_MW_CDF(lower_bounds[here2, 0], sample_sizes[0, 0], sample_sizes[0, 1])
@@ -243,9 +252,25 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
 
                 guess1 = norm.ppf(1 - target_alphas[j, i]) * cov_matrix_h0[i, i] ** 0.5 + means_h0[i]
                 h0_normal_upper[j, i] = find_root(guess1, find_this_h0)
+                if h0_normal_upper[j, i] == -np.inf:
+                    # in the last analysis, everything is significant
+                    # -> useless, just make it significant in previous analysis
+                    here = here[here != j]
+                    not_done[j] = False
+                    upper_bounds[j, i - 1] = lower_bounds[j, i-1] + 1
+                    if mode != 'normal':
+                        c_p = fixed_MW_CDF(upper_bounds[j, i - 1] - 1, sample_sizes[i-1, 0], sample_sizes[i-1, 1])
+                        h0_normal_upper[j, i - 1] = norm.ppf(c_p) * cov_matrix_h0[i - 1, i - 1] ** 0.5 + means_h0[i -1]
+                    else:
+                        h0_normal_upper[j, i - 1] = h0_normal_lower[j, i - 1]
+                    lo = h0_normal_lower[j, :].copy()
+                    lo[i] = h0_normal_upper[j, i]
+                    up = h0_normal_upper[j, :].copy()
+                    up[i] = np.inf
+                    updated_alphas[j, i] = updated_alphas[j, i - 1] + normal_probability(up, lo, True)
 
             if mode != 'normal':
-                c_p = norm.cdf((h0_normal_upper[here, i] - means_h0[i])/cov_matrix_h0[i, i])
+                c_p = norm.cdf((h0_normal_upper[here, i] - means_h0[i])/cov_matrix_h0[i, i] ** 0.5)
                 mirror, qs = \
                     transform_h0(sample_sizes[i, 0], sample_sizes[i, 1], 1 - c_p,
                                  np.ceil(h0_normal_upper[here, i]).astype(int))
@@ -275,13 +300,13 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
                 ha_normal_lower[j, i] = find_root(guess1, find_this_ha, f_increasing=False)
 
             if mode == 'marginally exact':
-                c_p = norm.cdf((ha_normal_lower[here2, i] - means_ha[i]) / cov_matrix_ha[i, i])
+                c_p = norm.cdf((ha_normal_lower[here2, i] - means_ha[i]) / cov_matrix_ha[i, i] ** 0.5)
                 lower_bounds[here2, i], qs = \
                     transform_ha(n1=sample_sizes[i, 0], n2=sample_sizes[i, 1], marginal_betas=c_p,
                                  normal_guesses=np.floor(ha_normal_lower[here2, i]).astype(int), cohens_d=cohens_d)
 
-                ha_normal_lower[here, i] = norm.ppf(qs) * cov_matrix_ha[i, i] ** 0.5 + means_ha[i]
-                for j in here:
+                ha_normal_lower[here2, i] = norm.ppf(qs) * cov_matrix_ha[i, i] ** 0.5 + means_ha[i]
+                for j in here2:
                     lo = ha_normal_lower[j, :].copy()
                     lo[i] = -np.inf
                     up = ha_normal_upper[j, :].copy()
@@ -295,8 +320,11 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
                     ha_normal_upper[here, i] = norm.ppf(c_p) * cov_matrix_ha[i, i] ** 0.5 + means_ha[i]
 
             else:
+                h0_normal_lower[here2, i] = ha_normal_lower[here2, i]
                 lower_bounds[here2, i] = np.floor(ha_normal_lower[here2, i]).astype(int)
                 lower_bounds[lower_bounds > np.prod(sample_sizes[i, :])] = np.prod(sample_sizes[i, :])
+                if here.size > 0:
+                    ha_normal_upper[here, i] = h0_normal_upper[here, i]
         elif mode == 'simulation':
             for j in np.arange(n_models)[not_done]:
                 if 10 ** -10 < target_betas[j, i] - updated_betas[j, i - 1] < np.sum(undecided[j, :])/n:
@@ -558,6 +586,7 @@ def transform_h0(n1, n2, marginal_alphas, normal_guesses):
 def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d, tol=10**-5):
     # it is more efficient to check a few values at once, because of shared caching within the iteration
     n_guesses = 3
+    guesses = min(max(np.median(normal_guesses), 1), n1*n2)
     guesses = np.ones((n_guesses, 1), dtype=int) * np.median(normal_guesses)
     guesses[0] -= 1
     guesses[2] += 1
@@ -599,8 +628,9 @@ def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d, tol=10**-5):
                 too_high.remove(i)
             elif results[-1] <= marginal_betas[i] + tol * marginal_betas[i]:
                 result_crit[i] = guess_h[results <= marginal_betas[i] + tol * marginal_betas[i]][-1]
-                result_ps[i] = HA_CDF_approximation(result_crit[i], np.array(n1).reshape(1), np.array(n2).reshape(1),
-                                                    cohens_d, "Min ARE", max_rows=30, tol=tol)
+                result_ps[i] = HA_CDF_approximation(np.array([result_crit[i]]), np.array(n1).reshape(1),
+                                                    np.array(n2).reshape(1), cohens_d, "Min ARE", max_rows=30,
+                                                    tol=tol)[0]
 
                 too_high.remove(i)
             elif np.any(results <= marginal_betas[i] + tol * marginal_betas[i]):
@@ -610,8 +640,8 @@ def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d, tol=10**-5):
                 too_high.remove(i)
 
     while too_low:
-        guess_h = guesses[0]
-        guesses -= n_guesses
+        guess_h = guesses[-1].copy()
+        guesses += n_guesses
         results = np.array(check_TypeII(guesses, np.array(n1).reshape(1), np.array(n2).reshape(1), cohens_d,
                                         "Min ARE", marginal_betas[too_low], max_rows=30, solution="lower", tol=tol))
 
@@ -624,7 +654,7 @@ def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d, tol=10**-5):
             elif results[0] > marginal_betas[i] - tol * marginal_betas[i]:
                 result_crit[i] = guess_h
                 result_ps[i] = HA_CDF_approximation(guess_h, np.array(n1).reshape(1), np.array(n2).reshape(1),
-                                                    cohens_d, "Min ARE", max_rows=30, tol=tol)
+                                                    cohens_d, "Min ARE", max_rows=30, tol=tol)[0]
 
                 too_low.remove(i)
             elif np.any(results > marginal_betas[i] - tol * marginal_betas[i]):
