@@ -263,11 +263,14 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
                         h0_normal_upper[j, i - 1] = norm.ppf(c_p) * cov_matrix_h0[i - 1, i - 1] ** 0.5 + means_h0[i -1]
                     else:
                         h0_normal_upper[j, i - 1] = h0_normal_lower[j, i - 1]
-                    lo = h0_normal_lower[j, :].copy()
-                    lo[i] = h0_normal_upper[j, i]
-                    up = h0_normal_upper[j, :].copy()
-                    up[i] = np.inf
-                    updated_alphas[j, i] = updated_alphas[j, i - 1] + normal_probability(up, lo, True)
+                    lo = h0_normal_lower[j, :i].copy()
+                    lo[i-1] = h0_normal_upper[j, i-1]
+                    up = h0_normal_upper[j, :i].copy()
+                    up[i-1] = np.inf
+                    if i == 1:
+                        updated_alphas[j, :] = normal_probability(up, lo, True)
+                    else:
+                        updated_alphas[j, (i-1):] = updated_alphas[j, i - 2] + normal_probability(up, lo, True)
 
             if mode != 'normal':
                 c_p = norm.cdf((h0_normal_upper[here, i] - means_h0[i])/cov_matrix_h0[i, i] ** 0.5)
@@ -298,6 +301,28 @@ def get_transformed(sample_sizes, target_alphas, target_betas, cohens_d, col_nam
 
                 guess1 = norm.ppf(target_betas[j, i]) * cov_matrix_ha[i, i] ** 0.5 + means_ha[i]
                 ha_normal_lower[j, i] = find_root(guess1, find_this_ha, f_increasing=False)
+
+                if ha_normal_lower[j, i] == np.inf:
+                    # in the last analysis, nothing is significant
+                    # -> useless, just make it not-significant in previous analysis
+                    here2 = here2[here2 != j]
+                    not_done[j] = False
+                    lower_bounds[j, i - 1] = upper_bounds[j, i-1] - 1
+                    if mode == 'marginally exact':
+                        c_p = HA_CDF_approximation(np.array(lower_bounds[j, i - 1]).reshape(-1, 1),
+                                                   sample_sizes[i-1, 0].reshape(1),
+                                                   sample_sizes[i-1, 1].reshape(1), cohens_d, "Min ARE", max_rows=30)
+                        ha_normal_lower[j, i - 1] = norm.ppf(c_p) * cov_matrix_ha[i-1, i-1] ** 0.5 + means_ha[i-1]
+                    else:
+                        ha_normal_lower[j, i - 1] = ha_normal_upper[j, i - 1]
+                    lo = ha_normal_lower[j, :i].copy()
+                    lo[i-1] = -np.inf
+                    up = ha_normal_upper[j, :i].copy()
+                    up[i-1] = ha_normal_lower[j, i]
+                    if i == 1:
+                        updated_betas[j, :] = normal_probability(up, lo, False)
+                    else:
+                        updated_betas[j, (i-1):] = updated_betas[j, i - 2] + normal_probability(up, lo, False)
 
             if mode == 'marginally exact':
                 c_p = norm.cdf((ha_normal_lower[here2, i] - means_ha[i]) / cov_matrix_ha[i, i] ** 0.5)
