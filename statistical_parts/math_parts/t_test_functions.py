@@ -140,7 +140,7 @@ def give_fixed_sample_size(cohens_d, alpha, beta, sides):
     else:
         sides = 2
 
-    n = int(np.round(((norm.ppf(1 - alpha/sides) + norm.ppf(1-beta, loc=cohens_d))/cohens_d)**2))
+    n = int(np.round(0.5 * ((norm.ppf(1 - alpha/sides) + norm.ppf(1-beta, loc=cohens_d))/cohens_d)**2))
     typeII = nct.cdf(t.ppf(1 - alpha/sides, df=2*n-2), df=2*n-2, nc=cohens_d * (n**2 / (2*n)) ** 0.5)
 
     while typeII > beta:
