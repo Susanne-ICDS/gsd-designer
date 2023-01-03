@@ -15,7 +15,7 @@ def min_are_pdf(x):
 
 
 def min_are_quantile(ps):
-    qs = 2*5**0.5 * np.cos(1/3*np.arccos(1-2*ps) + 4*np.pi/3)
+    qs = 20**0.5 * np.cos(1/3*np.arccos(1-2*ps) + 4*np.pi/3)
     return qs
 
 
@@ -75,21 +75,19 @@ def HA_all_sig_approximation(ks, ns, ms, shift, pdf, combinations=None, int_rang
         combos = None
 
     if return_intermediate:
-        results, intermediates = \
+        intermediates, results = \
             HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
                          manager, max_parallel, return_intermediate, tol_type='absolute', combinations=combos)
         if n_ks == 1:
             return results, intermediates
-        b = a.copy()
+
         for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
             if sig_is_upper:
                 a[-j] = results[i]
-                b[-j] = intermediates[i]
             else:
                 a[j] = results[i]
-                b[j] = intermediates[i]
 
-        return a, b
+        return a, intermediates
     results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
                            manager, max_parallel, return_intermediate, tol_type='absolute', combinations=combos)
     if n_ks == 1:

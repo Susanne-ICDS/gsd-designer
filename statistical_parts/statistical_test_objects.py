@@ -11,10 +11,27 @@ from statistical_parts.math_parts import t_test_functions, one_way_functions, wm
 from layout_instructions import spacing_variables as spacing
 from layout_instructions import label, table_style
 
+"""
+Debug input
+
+alphas = np.array([[0.02, 0.03, 0.04, 0.05 ], [0.002, 0.005, 0.01, 0.05 ], [0.0125, 0.025, 0.0375, 0.05 ]])
+betas = np.array([[0.1, 0.125, 0.15, 0.2 ], [0.03, 0.07, 0.1, 0.2 ], [0.05, 0.1, 0.15, 0.2 ]])
+sample_sizes = np.array([[6, 12, 18, 24], [6, 12, 18, 24]])
+rel_tol = 0.01
+CI=0.95
+col_names = ['Model id', 'Sig. bound 1', 'Sig. bound 2', 'Fut. bound 1', 'Fut. bound 2', 'Expected cost H0', 'Expected cost HA', 'Power at analysis 1', 'Power at analysis 2', 'Chance of true negative under H0 at analysis 1', 'Chance of true negative under H0 at analysis 2']
+model_ids = ['Pocock', 'OBF', 'Linear']
+default_n_repeats = 10
+max_n_repeats = 1000000
+costs = np.array([[ 6., 12., 18, 24]])
+test_parameters = {'sides': 'one', 'cohens_d': 1}
+memory_limit = 0.75
+"""
+
 # Global variables for this page only
 # Preceding underscore '_' makes sure it cannot be imported to other pages
 _min_analyses = 2
-_max_analyses = 6
+_max_analyses = 5
 _default_sample_step = 3
 _min_groups = 2
 _max_groups = 10
@@ -23,9 +40,9 @@ _max_groups = 10
 # the TestObject list
 
 # Dictionary of tests for the dropdown menu
-test_options = [{'label': 't-test (2 independent groups)', 'value': 'T'},
-                {'label': 'one-way ANOVA (more than 2 independent groups)', 'value': 'One-way'},
-                {'label': 'Mann-Whitney-Wilcoxon (non-parametric, 2 independent groups)', 'value': 'WMW'}]
+test_options = [{'label': 't-test', 'value': 'T'},
+                {'label': 'one-way ANOVA', 'value': 'One-way'},
+                {'label': 'Mann-Whitney-Wilcoxon', 'value': 'WMW'}]
 
 
 # region definition of test objects
@@ -223,9 +240,9 @@ class NewTest(BasicTest):
         return exact_sig, exact_fut, exact_true_neg = None, exact_power = None
         
     @staticmethod
-    def get_p_equivalent(x, N):
+    def get_p_equivalent(x, N, *args):
         # convert test statistic x into the corresponding p-value sample size(s) N (per group)
-        return t_test_functions.get_p_equivalent(x, N)
+        return t_test_functions.get_p_equivalent(x, N, *args)
         
 """
 
@@ -280,7 +297,7 @@ class TTest(BasicTest):
         if test_parameters['sd'] < 10 ** -9:
             return True, 'Standard deviation cannot be zero. Please fill in a different value.'
 
-        test_parameters['cohens_d'] = abs(means[:, 1] - means[:, 0])/test_parameters['sd']
+        test_parameters['cohens_d'] = (np.abs(means[:, 1] - means[:, 0]).astype(float)/test_parameters['sd'])[0]
 
         del test_parameters['means']
         del test_parameters['sd']
@@ -304,7 +321,7 @@ class TTest(BasicTest):
                        max_n_repeats, costs, test_parameters, memory_limit):
         """ Get the test statistics """
         return t_test_functions.get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids,
-                                                default_n_repeats, max_n_repeats, costs, test_parameters, memory_limit)
+                                               default_n_repeats, max_n_repeats, costs, test_parameters, memory_limit)
 
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):
@@ -313,7 +330,7 @@ class TTest(BasicTest):
         return t_test_functions.give_exact(sample_sizes, alphas, betas, **test_parameters)
 
     @staticmethod
-    def get_p_equivalent(x, N):
+    def get_p_equivalent(x, N, *args):
         return t_test_functions.get_p_equivalent(x, N)
 
 
@@ -408,7 +425,7 @@ class OneWay(BasicTest):
         return one_way_functions.give_exact(sample_sizes, alphas, betas, **test_parameters)
 
     @staticmethod
-    def get_p_equivalent(x, N):
+    def get_p_equivalent(x, N, *args):
         return one_way_functions.get_p_equivalent(x, N)
 
 
@@ -463,7 +480,7 @@ class WMWTest(BasicTest):
         if test_parameters['sd'] < 10 ** -9:
             return True, 'Standard deviation cannot be zero. Please fill in a different value.'
 
-        test_parameters['cohens_d'] = (np.abs(means[:, 1] - means[:, 0])/test_parameters['sd'])[0]
+        test_parameters['cohens_d'] = (np.abs(means[:, 1] - means[:, 0]).astype(float)/test_parameters['sd'])[0]
 
         del test_parameters['means']
         del test_parameters['sd']
@@ -490,7 +507,7 @@ class WMWTest(BasicTest):
                                             costs, test_parameters)
 
     @staticmethod
-    def get_p_equivalent(x, N):
-        return wmw_functions.get_p_equivalent(x, N)
+    def get_p_equivalent(x, N, sig):
+        return wmw_functions.get_p_equivalent(x, N, sig)
 
-# end region
+# endregion

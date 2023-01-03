@@ -15,13 +15,13 @@ example
 
 sample_sizes = np.array([(3, 4, 5), (3, 4, 5)])
 alphas = np.array([(0, 0.1, 0.15), (0.05, 0.1, 0.15), (0.05, 0.1, 0.15), (0.2, 0.3, 0.4), (0, 0, 0.05),
-        (0.01, 0.02, 0.03)])
+        (0.01, 0.02, 0.03)]).transpose()
 betas = np.array([(0.1, 0.2, 0.3), (0, 0.2, 0.3), (0.1, 0.2, 0.3), (0.1, 0.2, 0.3), (0, 0, 0.2), 
-        (0.15, 0.18, 0.2)])
+        (0.15, 0.18, 0.2)]).transpose()
 test_parameters = {'cohens_d': 2}
 mode = 'marginally exact'
 n_analyses = sample_sizes.shape[1]
-n_models = alphas.shape[0]
+n_models = alphas.shape[1]
 
 col_names=['model id'] + ['upper bounds 'f'{i}' for i in range(n_analyses)] + ['lower bounds 'f'{i}' for i in 
     range(n_analyses)] + ['cost h0'] + ['cost ha'] + ['power 'f'{i}' for i in range(n_analyses)] + \
@@ -29,8 +29,9 @@ col_names=['model id'] + ['upper bounds 'f'{i}' for i in range(n_analyses)] + ['
 model_ids = [''f'{i}' for i in range(n_models)]
 costs = np.sum(sample_sizes, axis=0)
 
-rel_tol = 10**-5
+rel_tol = 10**-3
 CI=0.95
+force_mode="simulation"
 
 df1, _, _, _ = get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, costs, test_parameters, 
     force_mode="marginally exact")
@@ -65,10 +66,10 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
     """
     total_sample_size = np.sum(sample_sizes[:, -1])
     n_analyses = int(sample_sizes.shape[1])
+    n_models = alphas.shape[0]
     sample_sizes = np.transpose(sample_sizes)
-    alphas = np.transpose(alphas)
-    betas = np.transpose(betas)
     cohens_d = test_parameters['cohens_d']
+    costs = costs.reshape(-1)
 
     if force_mode is not None:
         mode = force_mode
@@ -80,8 +81,8 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
         message1 = 'Calculations finished: '
         message2 = 'power based on marginally exact asymptotic approximation'
     elif mode == 'simulation' or (total_sample_size <= _sample_size_cat[1] and mode is None):
-        if rel_tol <= 10**-3:
-            rel_tol = 10**-3
+        if rel_tol <= 10**-4:
+            rel_tol = 10**-4
         n_simulations = get_sim_nr(alphas, betas, rel_tol) + 100
 
         mode = 'simulation'
@@ -101,7 +102,6 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
     # region Do the calculations/ simulations
     # region Initialize basics
     prod_ss = np.prod(sample_sizes, axis=1)
-    n_models = alphas.shape[0]
 
     upper_bounds = np.tile(prod_ss + 1, (n_models, 1))
     lower_bounds = - np.ones((n_models, n_analyses), dtype=int)
@@ -146,7 +146,7 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
     if mode == 'normal power' or mode == 'normal':
         cov_matrix_ha = cov_matrix_h0
     elif mode == 'simulation':
-        sims = simulate_U_stats(n_simulations, sample_sizes, cohens_d).base
+        sims = simulate_U_stats(n_simulations, sample_sizes, cohens_d)
 
     def normal_probability(smaller_than_vals, larger_than_vals, null_hypothesis=True):
         for i_1 in range(n_analyses):
@@ -175,7 +175,7 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
         if mode != 'normal':
             mirror, updated_alphas[here, 0] = \
                 transform_h0(sample_sizes[0, 0], sample_sizes[0, 1], alphas[here, 0],
-                             np.ceil(h0_normal_upper[here, 0]).astype(int))
+                             np.prod(sample_sizes[0, :]) - np.ceil(h0_normal_upper[here, 0]).astype(int))
             upper_bounds[here, 0] = np.prod(sample_sizes[0, :]) - mirror
             h0_normal_upper[here, 0] = norm.ppf(1 - updated_alphas[here, 0]) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
         else:
@@ -195,7 +195,6 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
             c_p = HA_CDF_approximation(np.array(upper_bounds[here, 0]).reshape(-1, 1) - 1, sample_sizes[0, 0].reshape(1),
                                        sample_sizes[0, 1].reshape(1), cohens_d, "Min ARE", max_rows=30)
             ha_normal_upper[here, 0] = norm.ppf(c_p) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
-
     elif mode == 'simulation':
         undecided = np.ones((n_models, n_simulations), dtype='?')
 
@@ -208,9 +207,6 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
                     updated_betas[i, 0] = np.sum(lower_bounds[i, 0] >= sims[0, :]) / n_simulations
             power[i, :] = np.sum(sims[0, :] >= upper_bounds[i, 0]) / n_simulations
             undecided[i, :] = np.logical_and(lower_bounds[i, 0] < sims[0, :], sims[0, :] < upper_bounds[i, 0])
-            if n_analyses > 1:
-                extra_costs_ha[i] += (costs[1]-costs[0]) * np.sum(undecided[i, :]) / n_simulations
-
     elif mode == 'normal power':
         ha_normal_lower[here2, 0] = norm.ppf(betas[here2, 0]) * cov_matrix_ha[0, 0] ** 0.5 + means_ha[0]
         lower_bounds[here2, 0] = np.floor(ha_normal_lower[here2, 0]).astype(int)
@@ -231,7 +227,7 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
     # endregion
     # region evaluate models that are done
     done = lower_bounds[:, 0] + 1 >= upper_bounds[:, 0]
-    if n_analyses == 1:
+    if np.any(done) or n_analyses == 1:
         updated_alphas[done, :] = updated_alphas[done, 0]
 
         if mode == 'marginally exact':
@@ -258,7 +254,7 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
 
     for i in np.arange(1, n_analyses):
         # extra cost = added cost of performing ith analysis * probability of getting to the ith analysis
-        extra_costs_h0[done] = extra_costs_ha[done] = 0
+        extra_costs_h0[:] = extra_costs_ha[:] = 0
         for j in np.arange(n_models)[not_done]:
             extra_costs_h0[j] = (costs[i] - costs[i-1]) * normal_probability(h0_normal_upper[j, :],
                                                                              h0_normal_lower[j, :], True)
@@ -367,10 +363,10 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
                     ha_normal_upper[here, i] = h0_normal_upper[here, i]
         elif mode == 'simulation':
             for j in np.arange(n_models)[not_done]:
-                if 10 ** -10 < betas[j, i] - updated_betas[j, i - 1] < np.sum(undecided[j, :])/n_simulations:
+                p_left = np.sum(undecided[j, :])/n_simulations
+                if 10 ** -10 < betas[j, i] - updated_betas[j, i - 1] < p_left:
                     lower_bounds[j, i] = np.round(np.quantile(np.array(sims[i, undecided[j, :]]),
-                                                              (betas[j, i] - updated_betas[j, i - 1])
-                                                              * n_simulations / np.sum(undecided[j, :]))) - 1
+                                                              (betas[j, i] - updated_betas[j, i - 1]) * p_left)) - 1
                     if lower_bounds[j, i] + 1 >= upper_bounds[j, i] or i == n_analyses-1:
                         updated_betas[j, i:] = np.sum(upper_bounds[j, i] - 1 >= sims[i, undecided[j, :]]) / n_simulations \
                                                + updated_betas[j, i - 1]
@@ -378,15 +374,14 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
                         updated_betas[j, i] = np.sum(lower_bounds[j, i] >= sims[i, undecided[j, :]]) / n_simulations \
                                               + updated_betas[j, i - 1]
 
-                elif np.sum(undecided[j, :])/n_simulations <= betas[j, i] - updated_betas[j, i - 1]:
+                elif p_left <= betas[j, i] - updated_betas[j, i - 1]:
                     lower_bounds[j, i] = upper_bounds[j, i] - 1
 
-                costs_ha[j] += extra_costs_ha[j]
+                costs_ha[j] += (costs[i] - costs[i-1]) * p_left
                 power[j, i:] += np.sum(sims[i, undecided[j, :]] >= upper_bounds[j, i]) / n_simulations
 
                 undecided[j, undecided[j, :]] = np.logical_and(lower_bounds[j, i] < sims[i, undecided[j, :]],
                                                                sims[i, undecided[j, :]] < upper_bounds[j, i])
-                extra_costs_ha[j] = np.sum(undecided[j, :])/n_simulations * (costs[i] - costs[i-1])
 
         costs_h0 += extra_costs_h0
         costs_ha += extra_costs_ha
@@ -416,6 +411,22 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
         lower_bounds[new_done, i] = upper_bounds[new_done, i] - 1
 
         if np.any(new_done):
+            c_p = vect_MW_CDF(lower_bounds[new_done, i], sample_sizes[i, 0], sample_sizes[i, 1])
+            h0_normal_lower[new_done, i] = norm.ppf(c_p) * cov_matrix_h0[i, i] ** 0.5 + means_h0[i]
+
+            for j in np.arange(n_models)[new_done]:
+                lo = h0_normal_lower[j, :].copy()
+                lo[i] = -np.inf
+                up = h0_normal_upper[j, :].copy()
+                up[i] = h0_normal_lower[j, i]
+                true_negatives[j, i:] = true_negatives[j, i - 1] + normal_probability(up, lo, True)
+                if mode != 'simulation':
+                    lo = ha_normal_lower[j, :].copy()
+                    lo[i] = ha_normal_upper[j, i]
+                    up = ha_normal_upper[j, :].copy()
+                    up[i] = np.inf
+                    power[j, i] = power[j, i - 1] + normal_probability(up, lo, False)
+
             if mode == 'marginally exact':
                 c_p = HA_CDF_approximation(np.array(lower_bounds[new_done, i]).reshape(-1, 1),
                                            sample_sizes[i, 0].reshape(1),
@@ -446,9 +457,15 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
                     lo[i] = lower_bounds[j, i]
                     up[i] = np.inf
                     power[j, i:] = power[j, i - 1] + normal_probability(up, lo, False)
-            not_done[not_done] = lower_bounds[not_done, i] + 1 < upper_bounds[not_done, i]
+            not_done[not_done] = lower_bounds[not_done, i] + 1 <= upper_bounds[not_done, i]
         # endregion
     # endregion
+
+    # Users won't realise that upper bounds = prod_ss + 1 and lower bounds = -1 are useless -> set to nan
+    upper_bounds = upper_bounds.astype(float)
+    lower_bounds = lower_bounds.astype(float)
+    upper_bounds[upper_bounds == prod_ss[np.newaxis, :] + 1] = np.nan
+    lower_bounds[lower_bounds == -1] = np.nan
 
     estimates = pd.DataFrame(np.concatenate((
         np.arange(0, n_models).reshape(-1, 1), upper_bounds, lower_bounds, costs_h0.reshape(-1, 1),
@@ -502,14 +519,24 @@ def give_fixed_sample_size(cohens_d, alpha, beta, sides):
     return n_guess, typeII
 
 
-def get_p_equivalent(x, N):
+def get_p_equivalent(x, N, sig):
     n1 = N[0]
     n2 = N[1]
     if n1 + n2 < _sample_size_cat[2]:
-        return 1 - fixed_MW_CDF(x - 1, n1, n2)
+        actual = 1 - fixed_MW_CDF(x - 1, n1, n2)
+
+        # This bit is (1) to make it look nicer and (2) to make sure the cut-off p-value at the last analysis
+        # It writes the cut-off points with the minimum nr of decimals required
+        # It also avoids confusion of <= or < p for significance (resp. >= or > for futility)
+        if sig:
+            nxt = 1 - fixed_MW_CDF(x - 2, n1, n2)
+        else:
+            nxt = 1 - fixed_MW_CDF(x, n1, n2)
+        mid = (actual + nxt) / 2
+        nice = np.round(mid, -np.floor(np.log10(np.abs(actual - nxt))).astype(int))
+        return nice
     else:
         return 1 - norm.cdf((x - 0.5 * n1 * n2)/(n1 * n2 * (n1 + n2 + 1) / 12)**0.5)
-
 
 
 # region help functions
@@ -553,7 +580,7 @@ def transform_h0(n1, n2, marginal_alphas, normal_guesses):
     normal_guesses[normal_guesses < 0] = -1
     normal_guesses[normal_guesses > n1*n2] = n1*n2
     marginal_alphas = marginal_alphas
-    p_1 = vect_MW_CDF(normal_guesses, n1, n2)
+    p_1 = vect_MW_CDF(normal_guesses, n1, n2).astype(float)
     u_1 = normal_guesses.copy()
     p_2 = p_1.copy()
 
@@ -595,7 +622,7 @@ def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d, tol=10**-5):
     guesses[2] += 1
 
     n_vals = marginal_betas.size
-    result_crit = np.ones(n_vals)
+    result_crit = np.ones(n_vals, dtype=int)
     result_ps = np.ones(n_vals)
 
     results = np.array(check_TypeII(guesses, np.array(n1).reshape(1), np.array(n2).reshape(1),

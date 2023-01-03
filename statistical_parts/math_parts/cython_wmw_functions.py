@@ -109,52 +109,34 @@ def comb(n, k):
     return result
 
 
-@cython.cfunc
-@cython.returns(cython.int[:, :])
-@cython.locals(group1_data=cython.double[:, :], group2_data=cython.double[:, :], ns=cython.int[:, :])
-def U_statistics_intern(group1_data, group2_data, ns):
-    # c function, cannot be imported to another python script
+def U_stats(g1, g2, ns):
     n_analyses: cython.int
     n_sims: cython.int
     i: cython.int
     j: cython.int
-    k: cython.int
-    s: cython.int
-    us: cython.int[:, :]
 
     n_analyses = ns.shape[0]
-    n_sims = group1_data.shape[1]
+    n_sims = g1.shape[1]
 
     us = np.zeros((n_analyses, n_sims), dtype=int)
 
     for j in range(ns[0, 0]):
-        for k in range(ns[0, 1]):
-            for s in range(n_sims):
-                us[0, s] = us[0, s] + int(group1_data[j, s] > group2_data[k, s])
+        us[0, :] = us[0, :] + np.sum(g1[j, :] > g2[:ns[0, 1], :], axis=0)
 
-    for i in range(n_analyses-1):
+    for i in range(n_analyses - 1):
         for j in np.arange(ns[i, 0], ns[i + 1, 0]):
-            for k in range(ns[i, 1]):
-                for s in range(n_sims):
-                    us[i + 1, s] = us[i + 1, s] + int(group1_data[j, s] > group2_data[k, s])
+            us[i + 1, :] = us[i + 1, :] + np.sum(g1[j, :] > g2[:ns[i, 1], :], axis=0)
 
         for j in range(ns[i + 1, 0]):
-            for k in np.arange(ns[i, 1], ns[i + 1, 1]):
-                for s in range(n_sims):
-                    us[i + 1, s] = us[i + 1, s] + int(group1_data[j, s] > group2_data[k, s])
+            us[i + 1, :] = us[i + 1, :] + np.sum(g1[j, :] > g2[ns[i, 1]:ns[i + 1, 1], :], axis=0)
 
     us = np.cumsum(us, axis=0)
     return us
 
 
-def U_stats(group1_data, group2_data, ns):
-    # python function, can be imported to another python script
-    return U_statistics_intern(group1_data, group2_data, ns)
-
-
 def simulate_U_stats(n, sample_sizes, cohens_d, pdf='Min ARE'):
     group1_data, group2_data = base_simulator(n, sample_sizes, pdf)
-    return U_statistics_intern(group1_data + cohens_d, group2_data, sample_sizes)
+    return U_stats(group1_data + cohens_d, group2_data, sample_sizes)
 
 
 def base_simulator(n, sample_sizes, pdf):
