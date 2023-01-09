@@ -523,7 +523,7 @@ def print_the_table(df, CI, model_info):
                 return 1
         elif np.isnan(x_se) or x_se == 0:
             p = sides * TestObject(model_info['Test']).get_p_equivalent(x, N, sig)
-            return round(p, 9 - int(np.floor(np.log10(p))))
+            return round(p, 6 - int(np.floor(np.log10(p))))
         else:
             ps = sides * TestObject(model_info['Test']).get_p_equivalent(x, N, sig)
             pll = sides * TestObject(model_info['Test']).get_p_equivalent(x + z_score*x_se, N, sig)
