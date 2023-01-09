@@ -14,7 +14,6 @@ from app import dash_app
 
 from statistical_parts.statistical_test_objects import TestObject
 from statistical_parts.error_spending import check_form_error_spent
-from statistical_parts.math_parts.error_spending_simulation import simulation_loop
 from statistical_parts.math_parts.confidence_intervals import simulate_effect_CI
 
 from layout_instructions import table_style, disabled_style_header, disabled_style_data, label
@@ -608,6 +607,7 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
     def crit_p(x, x_se, N, col_name):
         # NaNs and infinity cannot be rounded and cannot be shown as that
         # type in a dash.DataTable. Hence -> str
+        sig = "Sig." in col_name
         if np.isnan(x):
             return {col_name: 'NaN', '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
         elif np.isinf(x):
@@ -616,15 +616,15 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
             else:
                 return {col_name: 1, '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
         else:
-            return {col_name: sides * TestObject(identify_model['Test']).get_p_equivalent(x, N),
+            return {col_name: sides * TestObject(identify_model['Test']).get_p_equivalent(x, N, sig),
                     '95%CI (lower):' + col_name:
-                        sides * TestObject(identify_model['Test']).get_p_equivalent(x+norm.ppf(0.975) * x_se, N),
+                        sides * TestObject(identify_model['Test']).get_p_equivalent(x+norm.ppf(0.975) * x_se, N, sig),
                     '95%CI (upper):' + col_name:
-                        sides * TestObject(identify_model['Test']).get_p_equivalent(x-norm.ppf(0.975) * x_se, N)}
+                        sides * TestObject(identify_model['Test']).get_p_equivalent(x-norm.ppf(0.975) * x_se, N, sig)}
 
     sample_sizes = np.asarray(identify_model['Sample sizes'])
 
-    p_dicts = [{'Model id': identify_model['Model id'][i]} for i in estimates.index]
+    p_dicts = [{'Model id': identify_model['Model id'][int(i)]} for i in estimates.index]
 
     [p_dict.update(crit_p(estimates[col][i], std_errors[col][i], sample_sizes[:, int(col[-1]) - 1], col))
      for col in p_cols for (i, p_dict) in enumerate(p_dicts)]

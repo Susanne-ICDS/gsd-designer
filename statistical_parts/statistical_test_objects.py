@@ -14,9 +14,10 @@ from layout_instructions import label, table_style
 """
 Debug input
 
-alphas = np.array([[0.02, 0.03, 0.04, 0.05 ], [0.002, 0.005, 0.01, 0.05 ], [0.0125, 0.025, 0.0375, 0.05 ]])
-betas = np.array([[0.1, 0.125, 0.15, 0.2 ], [0.03, 0.07, 0.1, 0.2 ], [0.05, 0.1, 0.15, 0.2 ]])
-sample_sizes = np.array([[6, 12, 18, 24], [6, 12, 18, 24]])
+alphas = np.array([[0, 0, 0, 0, 0.05 ], [0, 0, 0, 0, 0.05 ], 
+    [0, 0, 0, 0, 0.05 ]])
+betas = np.array([[0.04, 0.08, 0.12, 0.16, 0.2 ], [0.02, 0.04, 0.07, 0.1, 0.2 ], [0.05, 0.1, 0.14, 0.16, 0.2 ]])
+sample_sizes = np.array([[6, 12, 18, 24, 28], [6, 12, 18, 24, 28]])
 rel_tol = 0.01
 CI=0.95
 col_names = ['Model id', 'Sig. bound 1', 'Sig. bound 2', 'Fut. bound 1', 'Fut. bound 2', 'Expected cost H0', 'Expected cost HA', 'Power at analysis 1', 'Power at analysis 2', 'Chance of true negative under H0 at analysis 1', 'Chance of true negative under H0 at analysis 2']

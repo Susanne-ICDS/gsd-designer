@@ -148,8 +148,9 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
     elif mode == 'simulation':
         sims = simulate_U_stats(n_simulations, sample_sizes, cohens_d)
 
+    # function to calculate the probability of a multidimensional interval for the multivariate normal distribution
     def normal_probability(smaller_than_vals, larger_than_vals, null_hypothesis=True):
-        for i_1 in range(n_analyses):
+        for i_1 in range(len(smaller_than_vals)):
             if larger_than_vals[i_1] != -np.inf:
                 # p(a cap b) = p(b) - p(not a cap b)
 
@@ -163,9 +164,58 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
 
                 return p_b - p_not_a_cap_b
         if null_hypothesis:
-            return multivariate_normal.cdf(smaller_than_vals, mean=means_h0, cov=cov_matrix_h0)
+            return multivariate_normal.cdf(smaller_than_vals, mean=means_h0[:len(smaller_than_vals)],
+                                           cov=cov_matrix_h0[:len(smaller_than_vals), :len(smaller_than_vals)])
         else:
-            return multivariate_normal.cdf(smaller_than_vals, mean=means_ha, cov=cov_matrix_ha)
+            return multivariate_normal.cdf(smaller_than_vals, mean=means_ha[:len(smaller_than_vals)],
+                                           cov=cov_matrix_ha[:len(smaller_than_vals), :len(smaller_than_vals)])
+
+    # make a specific instance of the above function where only the last smaller than/larger than variable can change,
+    # so that during root finding we don't have to go through the recursion every time
+    def get_normal_probability_func(fixed_s, fixed_l, smaller_than=True, null_hypothesis=True):
+        if len(fixed_s) == 0:
+            if smaller_than:
+                if null_hypothesis:
+                    def func(u): return norm.cdf(u, mean=means_h0[0], sd=cov_matrix_h0[0, 0]**0.5)
+                else:
+                    def func(u): return norm.cdf(u, mean=means_ha[0], sd=cov_matrix_ha[0, 0]**0.5)
+            else:
+                if null_hypothesis:
+                    def func(u): return 1 - norm.cdf(u, mean=means_h0[0], sd=cov_matrix_h0[0, 0]**0.5)
+                else:
+                    def func(u): return 1 - norm.cdf(u, mean=means_ha[0], sd=cov_matrix_ha[0, 0]**0.5)
+            return func
+
+        if not smaller_than:
+            a = normal_probability(fixed_s, fixed_l, null_hypothesis)
+            b = get_normal_probability_func(fixed_s, fixed_l, True, null_hypothesis)
+
+            def func(u): return a - b(u)
+            return func
+
+        for i_1 in range(len(fixed_l)):
+            if fixed_l[i_1] != -np.inf:
+                # p(a cap b) = p(b) - p(not a cap b)
+
+                new_l_vals = fixed_l.copy()
+                new_l_vals[i_1] = -np.inf
+                new_s_vals = fixed_s.copy()
+                new_s_vals[i_1] = fixed_l[i_1]
+
+                p_b = get_normal_probability_func(fixed_s, new_l_vals, True, null_hypothesis)
+                p_not_a_cap_b = get_normal_probability_func(new_s_vals, new_l_vals, True, null_hypothesis)
+                def func(u): return p_b(u) - p_not_a_cap_b(u)
+                return func
+
+        if null_hypothesis:
+            def func(u): return multivariate_normal.cdf(np.append(fixed_s, u), mean=means_h0[:len(fixed_s) + 1],
+                                                        cov=cov_matrix_h0[:len(fixed_s) + 1, :len(fixed_s) + 1])
+            return func
+        else:
+            def func(u): return multivariate_normal.cdf(np.append(fixed_s, u), mean=means_ha[:len(fixed_s) + 1],
+                                                        cov=cov_matrix_ha[:len(fixed_s) + 1, :len(fixed_s) + 1])
+            return func
+
     # endregion
     # region calculate 1st analysis bounds
     here = alphas[:, 0] > 10 ** -10
@@ -256,19 +306,18 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
         # extra cost = added cost of performing ith analysis * probability of getting to the ith analysis
         extra_costs_h0[:] = extra_costs_ha[:] = 0
         for j in np.arange(n_models)[not_done]:
-            extra_costs_h0[j] = (costs[i] - costs[i-1]) * normal_probability(h0_normal_upper[j, :],
-                                                                             h0_normal_lower[j, :], True)
+            extra_costs_h0[j] = (costs[i] - costs[i-1]) * normal_probability(h0_normal_upper[j, :i],
+                                                                             h0_normal_lower[j, :i], True)
             if mode != 'simulation':
-                extra_costs_ha[j] = (costs[i] - costs[i-1]) * normal_probability(ha_normal_upper[j, :],
-                                                                                 ha_normal_lower[j, :], False)
+                extra_costs_ha[j] = (costs[i] - costs[i-1]) * normal_probability(ha_normal_upper[j, :i],
+                                                                                 ha_normal_lower[j, :i], False)
         here = np.arange(n_models)[not_done][alphas[not_done, i] - updated_alphas[not_done, i - 1] > 10 ** -10]
         if here.size > 0:
+            funcs = {f'{j}': get_normal_probability_func(fixed_s=h0_normal_upper[j, :i], fixed_l=h0_normal_lower[j, :i],
+                                                         smaller_than=False, null_hypothesis=True) for j in here}
             for j in here:
                 def find_this_h0(u):
-                    suggested = h0_normal_lower[j, :].copy()
-                    suggested[i] = u
-                    p = normal_probability(h0_normal_upper[j, :], suggested, True)
-                    return alphas[j, i] - updated_alphas[j, i - 1] - p
+                    return alphas[j, i] - updated_alphas[j, i - 1] - funcs[f'{j}'](u)
 
                 guess1 = norm.ppf(1 - alphas[j, i] + updated_alphas[j, i - 1]) * cov_matrix_h0[i, i] ** 0.5 + \
                     means_h0[i]
@@ -287,11 +336,10 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
                         h0_normal_upper[j, i - 1] = norm.ppf(c_p) * cov_matrix_h0[i - 1, i - 1] ** 0.5 + means_h0[i - 1]
                     else:
                         h0_normal_upper[j, i - 1] = h0_normal_lower[j, i - 1]
-                    lo = h0_normal_lower[j, :].copy()
-                    lo[i:] = -np.inf
+                    lo = h0_normal_lower[j, :i].copy()
                     lo[i - 1] = h0_normal_upper[j, i - 1]
-                    up = h0_normal_upper[j, :].copy()
-                    up[i - 1:] = np.inf
+                    up = h0_normal_upper[j, :i].copy()
+                    up[i - 1] = np.inf
 
                     if i == 1:
                         updated_alphas[j, :] = normal_probability(up, lo, True)
@@ -307,11 +355,7 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
 
                 h0_normal_upper[here, i] = norm.ppf(1 - qs) * cov_matrix_h0[i, i] ** 0.5 + means_h0[i]
                 for j in here:
-                    lo = h0_normal_lower[j, :].copy()
-                    lo[i] = h0_normal_upper[j, i]
-                    up = h0_normal_upper[j, :].copy()
-                    up[i] = np.inf
-                    updated_alphas[j, i] = updated_alphas[j, i - 1] + normal_probability(up, lo, True)
+                    updated_alphas[j, i] = updated_alphas[j, i - 1] + funcs[f'{j}'](h0_normal_upper[j, i])
 
             else:
                 upper_bounds[here, i] = np.ceil(h0_normal_upper[here, i]).astype(int)
@@ -319,12 +363,11 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
 
         here2 = np.arange(n_models)[not_done][betas[not_done, i] - updated_betas[not_done, i - 1] > 10 ** -10]
         if here2.size > 0 and mode != 'simulation':
+            funcs = {f'{j}': get_normal_probability_func(ha_normal_upper[j, :i], ha_normal_lower[j, :i],
+                                                         smaller_than=True, null_hypothesis=False) for j in here2}
             for j in here2:
                 def find_this_ha(u):
-                    suggested = ha_normal_upper[j, :].copy()
-                    suggested[i] = u
-                    p = normal_probability(suggested, ha_normal_lower[j, :], False)
-                    return betas[j, i] - updated_betas[j, i - 1] - p
+                    return betas[j, i] - updated_betas[j, i - 1] - funcs[f'{j}'](u)
 
                 guess1 = norm.ppf(betas[j, i] - updated_betas[j, i - 1]) * cov_matrix_ha[i, i] ** 0.5 + means_ha[i]
                 ha_normal_lower[j, i] = find_root(guess1, find_this_ha, f_increasing=False)
@@ -343,11 +386,7 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
 
                 ha_normal_lower[here2, i] = norm.ppf(qs) * cov_matrix_ha[i, i] ** 0.5 + means_ha[i]
                 for j in here2:
-                    lo = ha_normal_lower[j, :].copy()
-                    lo[i] = -np.inf
-                    up = ha_normal_upper[j, :].copy()
-                    up[i] = ha_normal_lower[j, i]
-                    updated_betas[j, i] = updated_betas[j, i - 1] + normal_probability(up, lo, False)
+                    updated_betas[j, i] = updated_betas[j, i - 1] + funcs[f'{j}'](ha_normal_lower[j, i])
 
                 if here.size > 0:
                     c_p = HA_CDF_approximation(np.array(upper_bounds[here, i]).reshape(-1, 1) - 1,
@@ -368,8 +407,8 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
                     lower_bounds[j, i] = np.round(np.quantile(np.array(sims[i, undecided[j, :]]),
                                                               (betas[j, i] - updated_betas[j, i - 1]) * p_left)) - 1
                     if lower_bounds[j, i] + 1 >= upper_bounds[j, i] or i == n_analyses-1:
-                        updated_betas[j, i:] = np.sum(upper_bounds[j, i] - 1 >= sims[i, undecided[j, :]]) / n_simulations \
-                                               + updated_betas[j, i - 1]
+                        updated_betas[j, i:] = np.sum(upper_bounds[j, i] - 1 >= sims[i, undecided[j, :]]) \
+                                               / n_simulations + updated_betas[j, i - 1]
                     else:
                         updated_betas[j, i] = np.sum(lower_bounds[j, i] >= sims[i, undecided[j, :]]) / n_simulations \
                                               + updated_betas[j, i - 1]
@@ -520,6 +559,9 @@ def give_fixed_sample_size(cohens_d, alpha, beta, sides):
 
 
 def get_p_equivalent(x, N, sig):
+    if np.isnan(x):
+        return np.nan
+
     n1 = N[0]
     n2 = N[1]
     if n1 + n2 < _sample_size_cat[2]:
@@ -540,8 +582,6 @@ def get_p_equivalent(x, N, sig):
 
 
 # region help functions
-
-
 def determine_p0_2(cohens_d, pdf='Min ARE'):
     # function to determine
     # p0; the probability that one sample from the first group is larger than one from the second
