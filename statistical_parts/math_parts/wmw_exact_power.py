@@ -15,7 +15,7 @@ def min_are_pdf(x):
 
 
 def min_are_quantile(ps):
-    qs = 20**0.5 * np.cos(1/3*np.arccos(1-2*ps) + 4*np.pi/3)
+    qs = 2*5**0.5 * np.cos(1/3*np.arccos(1-2*ps) + 4*np.pi/3)
     return qs
 
 
@@ -43,9 +43,8 @@ def clean_input(ks, ns, ms, sig_is_upper):
     return ks, ns, ms, rel_ks
 
 
-def HA_all_sig_approximation(ks, ns, ms, shift, pdf, combinations=None, int_range=None, max_rows=6, tol=10 ** -5,
-                             max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False,
-                             sig_is_upper=False):
+def HA_all_sig_approximation(ks, ns, ms, shift, pdf, combinations=None, return_intermediate=False,
+                             sig_is_upper=False, **kwargs):
 
     ks, ns, ms, rel_ks = clean_input(ks, ns, ms, sig_is_upper)
     a = np.zeros(ks.shape[0]).tolist()
@@ -75,21 +74,23 @@ def HA_all_sig_approximation(ks, ns, ms, shift, pdf, combinations=None, int_rang
         combos = None
 
     if return_intermediate:
-        intermediates, results = \
-            HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
-                         manager, max_parallel, return_intermediate, tol_type='absolute', combinations=combos)
+        results, intermediates = \
+            HA_iteration(ks[rel_ks], ns, ms, shift, pdf, return_intermediate=return_intermediate, tol_type='absolute',
+                         combinations=combos, **kwargs)
         if n_ks == 1:
             return results, intermediates
-
+        b = a.copy()
         for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
             if sig_is_upper:
                 a[-j] = results[i]
+                b[-j] = intermediates[i]
             else:
                 a[j] = results[i]
+                b[j] = intermediates[i]
 
-        return a, intermediates
-    results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
-                           manager, max_parallel, return_intermediate, tol_type='absolute', combinations=combos)
+        return a, b
+    results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, return_intermediate=return_intermediate,
+                           tol_type='absolute', combinations=combos, **kwargs)
     if n_ks == 1:
         return results
     for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
@@ -101,9 +102,8 @@ def HA_all_sig_approximation(ks, ns, ms, shift, pdf, combinations=None, int_rang
     return a
 
 
-def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, int_range=None, max_rows=6, tol=10**-5,
-                max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False,
-                solution="underpowered", sig_is_upper=False):
+def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, return_intermediate=False,
+                solution="underpowered", sig_is_upper=False, **kwargs):
     ks, ns, ms, rel_ks = clean_input(ks, ns, ms, sig_is_upper)
     a = np.zeros(ks.shape[0]).tolist()
     if len(ks.shape) == 1:
@@ -128,16 +128,14 @@ def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, int_r
         for i, combo in enumerate(combinations):
             if rel_combos[i]:
                 combos.append(combo[rel_ks])
-        ref_value = required_power[rel_combos]
     else:
-        ref_value = required_power
+        rel_combos = np.ones(len(required_power), dtype='?')
         combos = None
 
     if return_intermediate:
         intermediates, results = \
-            HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson,
-                         manager, max_parallel, return_intermediate, tol_type='relative',
-                         ref_value=ref_value, combinations=combos, solution=solution)
+            HA_iteration(ks[rel_ks], ns, ms, shift, pdf, return_intermediate=return_intermediate, tol_type='relative',
+                         ref_value=required_power[rel_combos], combinations=combos, solution=solution, **kwargs)
 
         for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
             if sig_is_upper:
@@ -147,9 +145,8 @@ def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, int_r
 
         return intermediates, a
 
-    results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, int_range, max_rows, tol, max_iter, max_richardson, manager,
-                           max_parallel, return_intermediate, tol_type='relative', ref_value=ref_value,
-                           combinations=combos, solution=solution)
+    results = HA_iteration(ks[rel_ks], ns, ms, shift, pdf, return_intermediate=return_intermediate, tol_type='relative',
+                           ref_value=required_power[rel_combos], combinations=combos, solution=solution, **kwargs)
 
     for i, j in enumerate(np.arange(0, n_ks, 1)[rel_ks]):
         if sig_is_upper:
@@ -159,32 +156,25 @@ def check_power(ks, ns, ms, shift, pdf, required_power, combinations=None, int_r
     return a
 
 
-def HA_CDF_approximation(ks, ns, ms, shift, pdf, combinations=None, int_range=None, max_rows=6, tol=10**-5,
-                         max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False):
-    return HA_all_sig_approximation(ks, ms, ns, -shift, pdf, combinations, int_range, max_rows, tol, max_iter,
-                                    max_richardson, manager, max_parallel, return_intermediate, sig_is_upper=False)
+def HA_CDF_approximation(ks, ns, ms, shift, pdf='Min ARE', **kwargs):
+    return HA_all_sig_approximation(ks, ms, ns, -shift, pdf, sig_is_upper=False, **kwargs)
 
 
-def check_TypeII(ks, ns, ms, shift, pdf, ref_val, combinations=None, int_range=None, max_rows=6, tol=10**-5,
-                 max_iter=11, max_richardson=10, manager=None, max_parallel=0, return_intermediate=False,
-                 solution="lower"):
+def check_TypeII(ks, ns, ms, shift, pdf, ref_val, combinations=None, return_intermediate=False,
+                 solution="lower", **kwargs):
     if solution == "lower":
         solution = "underpowered"
     elif solution == "higher":
         solution = "overpowered"
-    return check_power(ks, ms, ns, -shift, pdf, ref_val, combinations=combinations, int_range=int_range,
-                       max_rows=max_rows, tol=tol, max_iter=max_iter, max_richardson=max_richardson, manager=manager,
-                       max_parallel=max_parallel, return_intermediate=return_intermediate, solution=solution,
-                       sig_is_upper=False)
+    return check_power(ks, ms, ns, -shift, pdf, required_power=ref_val, combinations=combinations,
+                       return_intermediate=return_intermediate, solution=solution,
+                       sig_is_upper=False, **kwargs)
 
 
 # noinspection PyTypeChecker
 def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -5, max_iter=15,
                  max_richardson=10, manager=None, max_parallel=0, return_intermediate=False, tol_type='absolute',
-                 ref_value=None, combinations=None, solution=None):
-    if ref_value is not None and type(ref_value) != np.ndarray:
-        ref_value = np.array(ref_value)
-
+                 ref_value=None, combinations=None, solution=None, verbose=False):
     if not (type(ns) == type(ms) == np.ndarray):
         raise TypeError("All input except max_rows should be of type numpy array.")
     if ns.shape != ms.shape or len(ns.shape) != 1:
@@ -197,6 +187,8 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
     if len(ks.shape) == 1:
         ks = ks.reshape((1, ks.size))
     n_ks = ks.shape[0]
+    if ref_value is not None and len(ref_value) == 1:
+        ref_value = np.repeat(ref_value[0], n_ks)
     # if the actual range is infinite, tol_multiplier accounts for error due to bounding
     tol_multiplier = 1
     required_borders = None
@@ -236,9 +228,33 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
     elif int_range is None:
         raise ValueError('int_range was not specified')
     interval_length = int_range[1] - int_range[0]
-    # make sure there are sufficient interval pieces for the error caused by max_rows to be O(h^2) and also h <= 1
+    # make sure there are sufficient interval pieces for the error caused by max_rows to be O(h^2) and also h < 1
     max_rows = min(n + m, max_rows)
-    c_exp = np.ceil(np.log2(max(((n + m) / max_rows), interval_length * 2)))
+    if required_borders is None:
+        c_exp = np.ceil(np.log2(max(((n + m) / max_rows), interval_length * 1.1)))
+    else:
+        min_c1 = np.log2((required_borders[0] - int_range[0]) * 1.05) + 2
+        min_c2 = np.log2((required_borders[1]-required_borders[0]) * 1.05) + 1
+        c_exp = np.ceil(max(np.log2((n + m) / max_rows), max(min_c1, min_c2)))
+
+
+    def iterate(outcome_list, ks_now, fs, gs, h):
+        outcome_list[:] = HA_CDF_matrix(ks_now, ns, ms, fs, gs, h, max_rows)
+        return outcome_list
+
+    def Richardson_expansion(result_list, not_yet_converged, new_elements, error_estimates):
+        for i_1, i_2 in enumerate(not_yet_converged):
+            old_array = result_list[i_2]
+            old_len = len(result_list[i_2])
+            new_len = min(old_len + 1, max_richardson)
+            new_array = np.zeros(new_len)
+            new_array[0] = new_elements[i_1]
+            for i_3 in range(new_len - 1):
+                new_array[i_3 + 1] = new_array[i_3] + (new_array[i_3] - old_array[i_3]) / (4 ** (i_3 + 1) - 1)
+            error_estimates[i_2] = min(np.abs(new_array[old_len - 1] - old_array[old_len - 1]),
+                                       np.abs(new_array[new_len - 1] - new_array[new_len - 2]))
+            result_list[i_2] = new_array
+        return result_list, error_estimates
 
     def check_done(not_yet_converged):
         still_not_converged = []
@@ -313,56 +329,36 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
         elif tol_type == 'relative' and solution is None:
             for i_1 in not_yet_converged:
                 result = iteration_results[i_1]
-                if np.abs(result[len(result) - 1] - ref_value) < tol_multiplier * tol < error_est_results[i_1]:
+                if np.abs(result[len(result) - 1] - ref_value) - error_est_results[i_1] < tol_multiplier * tol < \
+                        error_est_results[i_1]:
                     still_not_converged.append(i_1)
         elif tol_type == 'relative' and solution is not None:
             for i_1 in not_yet_converged:
                 result = iteration_results[i_1]
-                if np.any(np.abs(result[len(result) - 1] - ref_value) < tol_multiplier * tol) and \
-                        tol_multiplier * tol < error_est_results[i_1]:
+                if np.abs(result[len(result) - 1] - ref_value[i_1]) - error_est_results[i_1] < tol_multiplier * tol < \
+                        error_est_results[i_1]:
                     still_not_converged.append(i_1)
-
-            for val in ref_value:
-                under = -1
-                for i_1 in range(n_ks):
-                    if iteration_results[i_1][len(iteration_results[i_1]) - 1] < val:
-                        under += 1
-                    else:
-                        break
-                if under == -1 or under == n_ks - 1:
-                    pass
-                elif solution == "underpowered":
-                    if tol_multiplier * tol < error_est_results[under]:
-                        still_not_converged.append(under)
+            under = -1
+            for i_1 in range(n_ks):
+                if iteration_results[i_1][len(iteration_results[i_1]) - 1] < ref_value[i_1]:
+                    under += 1
                 else:
-                    if tol_multiplier * tol < error_est_results[under + 1]:
-                        still_not_converged.append(under + 1)
+                    break
+            if under == -1 or under == n_ks - 1:
+                pass
+            elif solution == "underpowered":
+                if tol_multiplier * tol < error_est_results[under]:
+                    still_not_converged.append(under)
+            else:
+                if tol_multiplier * tol < error_est_results[under + 1]:
+                    still_not_converged.append(under + 1)
         elif tol_type == 'absolute':
             for i_1 in not_yet_converged:
                 if tol_multiplier * tol < error_est_results[i_1]:
                     still_not_converged.append(i_1)
         still_not_converged = np.unique(still_not_converged).tolist()
         return still_not_converged
-
-    def iterate(outcome_list, ks_now, fs, gs, h):
-        outcome_list[:] = HA_CDF_matrix(ks_now, ns, ms, fs, gs, h, max_rows)
-        return outcome_list
-
-    def Richardson_expansion(result_list, not_yet_converged, new_elements, error_estimates):
-        for i_1, i_2 in enumerate(not_yet_converged):
-            old_array = result_list[i_2]
-            old_len = len(result_list[i_2])
-            new_len = min(old_len + 1, max_richardson)
-            new_array = np.zeros(new_len)
-            new_array[0] = new_elements[i_1]
-            for i_3 in range(new_len - 1):
-                new_array[i_3 + 1] = new_array[i_3] + (new_array[i_3] - old_array[i_3]) / (4 ** (i_3 + 1) - 1)
-            error_estimates[i_2] = np.abs(new_array[old_len - 1] - old_array[old_len - 1])
-            result_list[i_2] = new_array
-        return result_list, error_estimates
-
     # region only relevant when performing the next integration in parallel
-
     if manager is None:
         max_parallel = 0
     if max_parallel != 0:
@@ -405,7 +401,6 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
         mid_points_0 = int_range[0] + h_0 * (0.5 + np.arange(2 ** c_exp))
         fs_0 = np.array([pdf(point) for point in mid_points_0])
         gs_0 = np.array([pdf(point - shift) for point in mid_points_0])
-
     else:
         h_0 = np.array([(required_borders[0]-int_range[0])/2 ** (c_exp-2),
                        (required_borders[1]-required_borders[0])/2 ** (c_exp-1)])
@@ -447,7 +442,9 @@ def HA_iteration(ks, ns, ms, shift, pdf, int_range=None, max_rows=6, tol=10 ** -
             iteration_results, error_est_results = \
                 Richardson_expansion(iteration_results, not_done, new_results, error_est_results)
             not_done = check_done(not_done)
-
+            if verbose:
+                print(iteration_results)
+                print(error_est_results)
             if return_intermediate:
                 all_results.append(new_results)
             if not not_done:

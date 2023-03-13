@@ -12,7 +12,7 @@ _min_accuracy = 10 ** -4
 _max_accuracy = 10 ** -1
 
 layout = html.Div([
-    my_jumbo_box('Simulations', 'Get your results'),
+    my_jumbo_box('Evaluation', 'Get your design'),
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                     children=[
                         html.Br(),

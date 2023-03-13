@@ -3,7 +3,6 @@ import pandas as pd
 from scipy.stats import multivariate_normal, norm
 from scipy.optimize import root_scalar
 
-
 from statistical_parts.math_parts.error_spending_simulation import get_sim_nr
 from statistical_parts.math_parts.cython_wmw_functions import fixed_MW_CDF, simulate_U_stats, vect_MW_CDF
 from statistical_parts.math_parts.wmw_exact_power import check_TypeII, HA_CDF_approximation
@@ -31,7 +30,7 @@ costs = np.sum(sample_sizes, axis=0)
 
 rel_tol = 10**-3
 CI=0.95
-force_mode="simulation"
+force_mode=None
 
 df1, _, _, _ = get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, costs, test_parameters, 
     force_mode="marginally exact")
@@ -43,6 +42,7 @@ df4, _, _, _ = get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_name
     force_mode="normal")
 """
 
+# Trigger different method, based on accuracy/ time trade-off
 _sample_size_cat = [29, 60, 200]
 
 
@@ -223,10 +223,9 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
         h0_normal_upper[here, 0] = norm.ppf(1 - alphas[here, 0]) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
 
         if mode != 'normal':
-            mirror, updated_alphas[here, 0] = \
+            upper_bounds[here, 0], updated_alphas[here, 0] = \
                 transform_h0(sample_sizes[0, 0], sample_sizes[0, 1], alphas[here, 0],
-                             np.prod(sample_sizes[0, :]) - np.ceil(h0_normal_upper[here, 0]).astype(int))
-            upper_bounds[here, 0] = np.prod(sample_sizes[0, :]) - mirror
+                             np.ceil(h0_normal_upper[here, 0]).astype(int))
             h0_normal_upper[here, 0] = norm.ppf(1 - updated_alphas[here, 0]) * cov_matrix_h0[0, 0] ** 0.5 + means_h0[0]
         else:
             upper_bounds[here, 0] = np.ceil(h0_normal_upper[here, 0]).astype(int)
@@ -278,7 +277,7 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
     # region evaluate models that are done
     done = lower_bounds[:, 0] + 1 >= upper_bounds[:, 0]
     if np.any(done) or n_analyses == 1:
-        updated_alphas[done, :] = updated_alphas[done, 0]
+        updated_alphas[done, :] = updated_alphas[done, 0].reshape(-1, 1)
 
         if mode == 'marginally exact':
             c_p = HA_CDF_approximation(np.array(lower_bounds[done, 0]).reshape(-1, 1), sample_sizes[0, 0].reshape(1),
@@ -348,10 +347,8 @@ def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_id
 
             if mode != 'normal':
                 c_p = norm.cdf((h0_normal_upper[here, i] - means_h0[i]) / cov_matrix_h0[i, i] ** 0.5)
-                mirror, qs = \
-                    transform_h0(sample_sizes[i, 0], sample_sizes[i, 1], 1 - c_p,
-                                 np.ceil(h0_normal_upper[here, i]).astype(int))
-                upper_bounds[here, i] = np.prod(sample_sizes[i, :]) - mirror
+                upper_bounds[here, i], qs = transform_h0(sample_sizes[i, 0], sample_sizes[i, 1], c_p,
+                                                         np.ceil(h0_normal_upper[here, i]).astype(int))
 
                 h0_normal_upper[here, i] = norm.ppf(1 - qs) * cov_matrix_h0[i, i] ** 0.5 + means_h0[i]
                 for j in here:
@@ -524,28 +521,30 @@ def give_fixed_sample_size(cohens_d, alpha, beta, sides):
     else:
         s_f = 2
 
+    alpha = alpha*0.99999999     # significance for p-value <= 0.05 or < 0.05, this way no discussion
+
     def eval_typeII(n):
+        # normal approximation of the critical value
         crit_guess = int(norm.ppf(1 - alpha / s_f) * (n**2 * (2 * n + 1) / 12)**0.5 + 0.5 * n**2)
-        if 2*n < _sample_size_cat[0]:
-            crit_val, _ = transform_h0(n, n, np.array([1 - alpha / s_f]), np.array([crit_guess]))
-            tII = check_TypeII(crit_val.reshape(1, 1).astype(int) - 1, np.array([n]), np.array([n]),
-                               ref_val=np.array([beta]), pdf='Min ARE', shift=cohens_d, max_rows=30)[0]
-        elif 2*n < _sample_size_cat[1]:
-            crit_val, _ = transform_h0(n, n, np.array([1 - alpha / s_f]), np.array([crit_guess]))
+        if 2*n < _sample_size_cat[1]:
+            # get the exact critical value and simulate power
+            crit_val, _ = transform_h0(n, n, np.array([alpha / s_f]), np.array([crit_guess]))
             n_sims = int(min(100000, 1 / beta * 100) + 1000)
             sims = simulate_U_stats(n_sims, sample_sizes=np.array([(n, n)]), cohens_d=cohens_d, pdf='Min ARE')
             tII = np.sum(sims < crit_val) / n_sims
 
         elif 2*n < _sample_size_cat[2]:
+            # get the exact critical value and asymptotic power
             p0, p1, p2 = determine_p0_2(cohens_d, pdf='Min ARE')
-            crit_val = transform_h0(n, n, np.array([1 - alpha/s_f]), np.array([crit_guess]))[0][0]
-            tII = norm.cdf(
-                (crit_val - p0 * n ** 2) / ((p0 + (n - 1) * (p1 + p2) + (1 - 2 * n) * p0 ** 2) * n ** 2) ** 0.5)
+            crit_val = transform_h0(n, n, np.array([alpha/s_f]), np.array([crit_guess]))[0][0]
+            tII = norm.cdf((crit_val - p0 * n ** 2) / (n**2*(2*n+1)/12)**0.5)
 
         else:
+            # asymptotic everything
             p0, p1, p2 = determine_p0_2(cohens_d, pdf='Min ARE')
-            tII = norm.cdf(
-                (crit_guess - p0 * n ** 2) / ((p0 + (n - 1) * (p1 + p2) + (1 - 2 * n) * p0 ** 2) * n ** 2) ** 0.5)
+            crit_val = norm.ppf(1 - alpha / s_f) * (n**2 * (2 * n + 1) / 12)**0.5 + 0.5 * n**2 \
+                + 0.5 * (alpha/s_f > 0.02)  # continuity correction if necessary
+            tII = norm.cdf((crit_val - p0 * n ** 2) / (n**2*(2*n+1)/12)**0.5)
 
         return tII
 
@@ -567,7 +566,7 @@ def get_p_equivalent(x, N, sig):
     if n1 + n2 < _sample_size_cat[2]:
         actual = 1 - fixed_MW_CDF(x - 1, n1, n2)
 
-        # This bit is (1) to make it look nicer and (2) to make sure the cut-off p-value at the last analysis
+        # This bit is to make it look nicer
         # It writes the cut-off points with the minimum nr of decimals required
         # It also avoids confusion of <= or < p for significance (resp. >= or > for futility)
         if sig:
@@ -575,6 +574,8 @@ def get_p_equivalent(x, N, sig):
         else:
             nxt = 1 - fixed_MW_CDF(x, n1, n2)
         mid = (actual + nxt) / 2
+        if actual == nxt:
+            return actual
         nice = np.round(mid, -np.floor(np.log10(np.abs(actual - nxt))).astype(int))
         return nice
     else:
@@ -620,36 +621,37 @@ def transform_h0(n1, n2, marginal_alphas, normal_guesses):
     normal_guesses[normal_guesses < 0] = -1
     normal_guesses[normal_guesses > n1*n2] = n1*n2
     marginal_alphas = marginal_alphas
-    p_1 = vect_MW_CDF(normal_guesses, n1, n2).astype(float)
+    # p_1 contains the probabilities of the u statistics, p_2 will contain the probabilities of one value lower
     u_1 = normal_guesses.copy()
+    p_1 = 1 - vect_MW_CDF(normal_guesses - 1, n1, n2).astype(float)
     p_2 = p_1.copy()
 
-    u_1[p_1 >= marginal_alphas - 10 ** -10] -= 1
-    p_1[p_1 >= marginal_alphas - 10 ** -10] = vect_MW_CDF(u_1[p_1 >= marginal_alphas - 10 ** -10], n1, n2)
-    p_2[p_1 < marginal_alphas - 10 ** -10] = vect_MW_CDF(u_1[p_1 < marginal_alphas - 10 ** -10] + 1, n1, n2)
+    u_1[p_1 > marginal_alphas + 10 ** -10] += 1
+    p_1[p_1 > marginal_alphas + 10 ** -10] = 1 - vect_MW_CDF(u_1[p_1 > marginal_alphas + 10 ** -10] - 1, n1, n2)
+    p_2[p_1 <= marginal_alphas + 10 ** -10] = 1 - vect_MW_CDF(u_1[p_1 <= marginal_alphas + 10 ** -10] - 2, n1, n2)
 
-    done = np.logical_or(np.abs(p_1 - marginal_alphas) < 10 ** -10,
+    done = np.logical_or(np.abs(p_1 - marginal_alphas) <= 10 ** -10,
                          np.logical_and(p_1 < marginal_alphas - 10 ** -10,
                                         p_2 > marginal_alphas + 10 ** -10))
     while not np.all(done):
         too_high = p_1 > marginal_alphas + 10 ** -10
-        u_1[too_high] -= 1
+        u_1[too_high] += 1
         p_2[too_high] = p_1[too_high]
-        p_1[too_high] = vect_MW_CDF(u_1[too_high], n1, n2)
-
-        equal = np.abs(p_2 - marginal_alphas) < 10 ** -10
-        u_1[equal] += 1
-        p_1[equal] = p_2[equal]
-        p_2[equal] = np.inf
+        p_1[too_high] = 1 - vect_MW_CDF(u_1[too_high] - 1, n1, n2)
 
         too_low = p_2 < marginal_alphas - 10 ** -10
-        u_1[too_low] += 1
+        u_1[too_low] -= 1
         p_1[too_low] = p_2[too_low]
-        p_2[too_low] = vect_MW_CDF(u_1[too_low], n1, n2)
+        p_2[too_low] = 1 - vect_MW_CDF(u_1[too_low] - 2, n1, n2)
 
-        done = np.logical_or(np.abs(p_1 - marginal_alphas) < 10 ** -10,
-                             np.logical_and(p_1 < marginal_alphas + 10 ** -10,
-                                            marginal_alphas < p_2 - 10 ** -10))
+        good = np.abs(p_2 - marginal_alphas) <= 10 ** -10
+        u_1[good] -= 1
+        p_1[good] = p_2[good]
+        p_2[good] = np.inf
+
+        done = np.logical_or(np.abs(p_1 - marginal_alphas) <= 10 ** -10,
+                             np.logical_and(p_1 < marginal_alphas - 10 ** -10,
+                                            p_2 > marginal_alphas + 10 ** -10))
     return u_1, p_1
 
 
@@ -665,8 +667,8 @@ def transform_ha(n1, n2, marginal_betas, normal_guesses, cohens_d, tol=10**-5):
     result_crit = np.ones(n_vals, dtype=int)
     result_ps = np.ones(n_vals)
 
-    results = np.array(check_TypeII(guesses, np.array(n1).reshape(1), np.array(n2).reshape(1),
-                                    cohens_d, "Min ARE", marginal_betas, max_rows=30, solution="lower", tol=tol))
+    results = np.array(check_TypeII(guesses, np.array(n1).reshape(1), np.array(n2).reshape(1), cohens_d,
+                                    "Min ARE", marginal_betas.reshape(-1), max_rows=30, solution="lower", tol=tol))
     too_high = []
     too_low = []
 

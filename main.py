@@ -12,7 +12,7 @@ app = server
 
 BISI_LOGO = '/assets/BISI_NEGATIVE.svg'
 SQUARE_LOGO = '/assets/SQUARE_NEGATIVE.svg'
-version = '1.1.' + str(int(open("version.txt", "r").read()))
+version = '2.0.' + str(int(open("version.txt", "r").read()))
 local = False
 memory_limit = 1 - 0.25  # in GigaByte
 
