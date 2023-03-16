@@ -1,9 +1,5 @@
-import dash_core_components as dcc
 import dash_bootstrap_components as dbc
-import dash_html_components as html
-
-import datetime
-import numpy as np
+from dash import html, dcc
 
 from app import dash_app, server
 import callbacks
@@ -16,7 +12,7 @@ app = server
 
 BISI_LOGO = '/assets/BISI_NEGATIVE.svg'
 SQUARE_LOGO = '/assets/SQUARE_NEGATIVE.svg'
-version = '1.0.' + str(int(open("version.txt", "r").read()))
+version = '2.0.' + str(int(open("version.txt", "r").read()))
 local = False
 memory_limit = 1 - 0.25  # in GigaByte
 
@@ -80,7 +76,7 @@ dash_app.layout = html.Div(children=[navbar.bar, dbc.Container([
                                'App developed by: Susanne Blotwijk', html.Br(),
                                html.Br(), 'Version: ' + version, html.Br(),
                                ])],
-            style={'color': '#fff', 'background-color': '#1E1E1E', 'font-family': 'Roboto'},
+            style={'color': '#fff', 'background-color': '#1E1E1E'},
             justify="center"),
 
     dbc.Row(style={'color': '#fff', 'background-color': '#1E1E1E', "height": "2rem"}),

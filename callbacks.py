@@ -1,9 +1,8 @@
 import dash
-import dash_table
-import dash_html_components as html
+from dash import dash_table, html
 from dash.exceptions import PreventUpdate
 from dash.dependencies import Input, Output, State, MATCH, ALL
-from dash_extensions.snippets import send_data_frame, send_bytes
+from dash.dcc import send_data_frame, send_bytes
 import dash_bootstrap_components as dbc
 
 import pandas as pd
@@ -15,7 +14,6 @@ from app import dash_app
 
 from statistical_parts.statistical_test_objects import TestObject
 from statistical_parts.error_spending import check_form_error_spent
-from statistical_parts.math_parts.error_spending_simulation import simulation_loop
 from statistical_parts.math_parts.confidence_intervals import simulate_effect_CI
 
 from layout_instructions import table_style, disabled_style_header, disabled_style_data, label
@@ -315,7 +313,7 @@ def add_row(n_clicks, n_analyses, rows, columns):
 # endregion
 
 
-# region critical bound simulation
+# region critical bound simulation/calculation
 def create_evaluation(local, memory_limit):
     @dash_app.callback(
         Output('status', 'children'),
@@ -382,8 +380,8 @@ def create_evaluation(local, memory_limit):
         problem, message = TestObject(stat_test).check_sample_size(sample_sizes, n_analyses)
         if problem:
             return message, error_color, True, dash.no_update, dash.no_update
-
-        sample_sizes = message
+        else:
+            sample_sizes = message
 
         # region check costs
         if np.any([costs[0]['analysis-{}'.format(i)] == '' for i in range(n_analyses)]):
@@ -403,10 +401,10 @@ def create_evaluation(local, memory_limit):
                                                   taus, error_spending_function, error_spent)
         if problem:
             return message, error_color, True, dash.no_update, dash.no_update
-
-        alphas = message[0]
-        betas = message[1]
-        error_spending_param = message[2]
+        else:
+            alphas = message[0]
+            betas = message[1]
+            error_spending_param = message[2]
 
         problem, message = TestObject(stat_test).check_input(test_param_values, test_param_values_ids, test_param_data,
                                                              test_param_data_ids, n_groups=n_groups)
@@ -416,46 +414,30 @@ def create_evaluation(local, memory_limit):
             test_param_values = message
         # endregion
 
-        # region Summarize user input, plus give id's to the different designs/models
+        # Summarize user input, plus give id's to the different designs/models
         identify_model = {'Test': stat_test, 'Number of analyses': n_analyses, 'Sample sizes': sample_sizes.tolist(),
                           'Costs': costs.tolist(), 'Type I': alpha, 'Type II': beta, 'Spending': spending,
                           **test_param_values, **error_spending_param}
-        # endregion
 
-        # region Simulate until the confidence interval for relative error is smaller than tolerance level
-        exact_sig, exact_fut, exact_true_neg, exact_power, lower_limit, upper_limit = \
-            TestObject(stat_test).give_exact(sample_sizes, alphas, betas, test_param_values)
-
-        def simulator_h0(n_sim):
-            return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'H0', memory_limit, test_param_values)
-
-        def simulator_ha(n_sim):
-            return TestObject(stat_test).simulate_statistics(n_sim, sample_sizes, 'HA', memory_limit, test_param_values)
-
-        # Name all the properties being simulated
+        # Name all the properties being simulated/calculated
         col_names = ['Model id'] + ['Sig. bound {}'.format(i + 1) for i in range(n_analyses)] + \
                     ['Fut. bound {}'.format(i + 1) for i in range(n_analyses)] + \
                     ['Expected cost H0', 'Expected cost HA'] + \
                     ['Power at analysis {}'.format(i + 1) for i in range(n_analyses)] + \
                     ['Chance of true negative under H0 at analysis {}'.format(i + 1) for i in range(n_analyses)]
 
-        estimates, std_errors, n_simulations, counts = \
-            simulation_loop(alphas, betas, exact_sig, exact_fut, rel_tol, CI, col_names, identify_model['Model id'],
-                            _default_n_repeats, _max_n_repeats, simulator_h0, simulator_ha, costs, exact_true_neg,
-                            exact_power, lower_limit, upper_limit)
-        # endregion
+        # Obtain statistics
+        estimates, std_errors, message_title, message = \
+            TestObject(stat_test).get_statistics(
+                alphas, betas, sample_sizes, rel_tol, CI, col_names, identify_model['Model id'],
+                _default_n_repeats, _max_n_repeats, costs, test_param_values, memory_limit)
 
         estimates = estimates.astype(str)
         std_errors = std_errors.astype(str)
         # The string type-casting is because json serialization does not support infinite values
 
-        counts_str = '{}'.format(counts[col_names[1]][0])
-        for i in range(counts.shape[0] - 1):
-            counts_str += ', ' + '{}'.format(counts[col_names[1]][i])
-
-        return [html.B('Simulations finished: '), 'Results per model based on respectively ' + counts_str +
-                                                  ' estimates with {} simulations each'.format(n_simulations)], \
-            'success', True, identify_model, [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
+        return [html.B(message_title), message], 'success', True, identify_model, \
+               [estimates.to_json(orient='split'), std_errors.to_json(orient='split')]
 
 
 @dash_app.callback(
@@ -495,12 +477,12 @@ def print_the_table(df, CI, model_info):
         elif x == 0:
             return x
         elif np.isnan(x_se) or x_se == 0:
-            return round(x, 9 - int(np.floor(np.log10(np.abs(x)))))
+            return round(x, 4 - int(np.floor(np.log10(np.abs(x)))))
         else:
             return round(x, -int(np.floor(np.log10(z_score*x_se))))
 
     results_dict = [{col: round_to_sig(estimates[col][i], std_errors[col][i])
-                     for col in estimates.columns[:-1]} for i in estimates.index]
+                     for col in estimates.columns[estimates.columns != 'Model id']} for i in estimates.index]
 
     for (i, modId) in enumerate(estimates['Model id']):
         # Add model id column to the dictionary
@@ -529,7 +511,7 @@ def print_the_table(df, CI, model_info):
                                   data=results_dict, editable=False, **table_style,
                                   style_table={'overflowX': 'auto', 'maxWidth': '{}rem'.format((len(rel_cols)+2) * 10)})
 
-    def crit_p(x, x_se, N):
+    def crit_p(x, x_se, N, sig):
         # NaNs and infinity cannot be rounded and cannot be shown as that
         # type in a dash.DataTable. Hence -> str
         if np.isnan(x):
@@ -540,18 +522,19 @@ def print_the_table(df, CI, model_info):
             else:
                 return 1
         elif np.isnan(x_se) or x_se == 0:
-            p = sides * TestObject(model_info['Test']).get_p_equivalent(x, N)
-            return round(p, 9 - int(np.floor(np.log10(p))))
+            p = sides * TestObject(model_info['Test']).get_p_equivalent(x, N, sig)
+            return round(p, 6 - int(np.floor(np.log10(p))))
         else:
-            ps = sides * TestObject(model_info['Test']).get_p_equivalent(x, N)
-            pll = sides * TestObject(model_info['Test']).get_p_equivalent(x + z_score*x_se, N)
-            pul = sides * TestObject(model_info['Test']).get_p_equivalent(x - z_score*x_se, N)
+            ps = sides * TestObject(model_info['Test']).get_p_equivalent(x, N, sig)
+            pll = sides * TestObject(model_info['Test']).get_p_equivalent(x + z_score*x_se, N, sig)
+            pul = sides * TestObject(model_info['Test']).get_p_equivalent(x - z_score*x_se, N, sig)
             dif = max(pul-ps, ps-pll)
             return round(ps, -int(np.floor(np.log10(dif))))
 
     sample_sizes = np.asarray(model_info['Sample sizes'])
 
-    results_dict = [{col: crit_p(estimates[col][i], std_errors[col][i], sample_sizes[:, int(col[-1]) - 1])
+    results_dict = [{col: crit_p(estimates[col][i], std_errors[col][i], sample_sizes[:, int(col[-1]) - 1],
+                                 "Sig." in col)
                     for col in rel_cols} for i in estimates.index]
     
     for (i, modId) in enumerate(estimates['Model id']):
@@ -624,6 +607,7 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
     def crit_p(x, x_se, N, col_name):
         # NaNs and infinity cannot be rounded and cannot be shown as that
         # type in a dash.DataTable. Hence -> str
+        sig = "Sig." in col_name
         if np.isnan(x):
             return {col_name: 'NaN', '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
         elif np.isinf(x):
@@ -632,15 +616,15 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
             else:
                 return {col_name: 1, '95%CI (lower): ' + col_name: 'NaN', '95%CI (upper): ' + col_name: 'NaN'}
         else:
-            return {col_name: sides * TestObject(identify_model['Test']).get_p_equivalent(x, N),
+            return {col_name: sides * TestObject(identify_model['Test']).get_p_equivalent(x, N, sig),
                     '95%CI (lower):' + col_name:
-                        sides * TestObject(identify_model['Test']).get_p_equivalent(x+norm.ppf(0.975) * x_se, N),
+                        sides * TestObject(identify_model['Test']).get_p_equivalent(x+norm.ppf(0.975) * x_se, N, sig),
                     '95%CI (upper):' + col_name:
-                        sides * TestObject(identify_model['Test']).get_p_equivalent(x-norm.ppf(0.975) * x_se, N)}
+                        sides * TestObject(identify_model['Test']).get_p_equivalent(x-norm.ppf(0.975) * x_se, N, sig)}
 
     sample_sizes = np.asarray(identify_model['Sample sizes'])
 
-    p_dicts = [{'Model id': identify_model['Model id'][i]} for i in estimates.index]
+    p_dicts = [{'Model id': identify_model['Model id'][int(i)]} for i in estimates.index]
 
     [p_dict.update(crit_p(estimates[col][i], std_errors[col][i], sample_sizes[:, int(col[-1]) - 1], col))
      for col in p_cols for (i, p_dict) in enumerate(p_dicts)]
@@ -672,6 +656,7 @@ def generate_download_file(n_clicks_csv, n_clicks_excel, identify_model, df):
 # endregion
 
 
+# region effect size estimates
 @dash_app.callback(Output('n_termination', 'min'),
                    Output('n_termination', 'max'),
                    Input('used_model', 'value'),
@@ -708,6 +693,9 @@ def create_evaluation_CI(local, memory_limit):
             one_sided = True
         elif test == 'T':
             one_sided = model_info['sides'] == 'one'
+        elif test == 'WMW':
+            return "This feature has not been implemented for this test. " + \
+                   "If this is something you want you can contact me at susanne.blotwijk [at] vub.be"
         else:
             raise ValueError
 
@@ -740,3 +728,5 @@ def create_evaluation_CI(local, memory_limit):
                                            one_sided, rel_tol, rel_tol, memory_limit, 10**max_iter)
 
         return estimate_text
+
+# endregion

@@ -1,7 +1,6 @@
-import dash_html_components as html
-import dash_core_components as dcc
+from dash import dcc, html
 import dash_bootstrap_components as dbc
-from dash_extensions import Download
+from dash.dcc import Download
 
 from layout_instructions import spacing_variables as spacing
 from layout_instructions import label, my_jumbo_box, regular_text, table_style
@@ -13,7 +12,7 @@ _min_accuracy = 10 ** -4
 _max_accuracy = 10 ** -1
 
 layout = html.Div([
-    my_jumbo_box('Simulations', 'Get your results'),
+    my_jumbo_box('Evaluation', 'Get your design'),
     dbc.Row(dbc.Col(width={'offset': spacing['offset'], 'size': spacing['size']},
                     children=[
                         html.Br(),

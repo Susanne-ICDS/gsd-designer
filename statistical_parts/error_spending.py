@@ -1,5 +1,5 @@
-import dash_table
-import dash_html_components as html
+from dash import dash_table
+from dash import html
 import dash_bootstrap_components as dbc
 
 import numpy as np
@@ -140,11 +140,11 @@ def check_form_error_spent(error_type, n_analyses, spending, alpha, beta, taus, 
         if np.any(np.isnan(alphas)) or np.any(np.isnan(betas)):
             return True, 'Please fill in all the cells in the error spending input table.'
 
-        if np.any(alphas[:, -1] != alpha):
+        if np.any(np.abs(alphas[:, -1] - alpha) > 10**-8):
             return True, 'The error spending values in column Alpha {} should equal the '.format(n_analyses) + \
                    'type I error, i.e. {}. Please check your input'.format(alpha),
 
-        if np.any(betas[:, -1] != beta):
+        if np.any(np.abs(betas[:, -1] - beta) > 10**-8):
             return True, 'The error spending values in column Beta {} should equal the '.format(n_analyses) + \
                    'type II error, i.e. {}. Please check your input'.format(beta),
 

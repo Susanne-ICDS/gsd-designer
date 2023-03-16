@@ -1,30 +1,49 @@
-import dash_html_components as html
+from dash import html
 import dash_bootstrap_components as dbc
-import dash_table
+from dash import dash_table
 from dash.exceptions import PreventUpdate
 
 import pandas as pd
 import numpy as np
 
-from statistical_parts.math_parts import t_test_functions
-from statistical_parts.math_parts import one_way_functions
+from statistical_parts.math_parts import t_test_functions, one_way_functions, wmw_functions
 
 from layout_instructions import spacing_variables as spacing
 from layout_instructions import label, table_style
 
+"""
+Debug input
+
+alphas = np.array([[0, 0, 0, 0, 0.05 ], [0, 0, 0, 0, 0.05 ], 
+    [0, 0, 0, 0, 0.05 ]])
+betas = np.array([[0.04, 0.08, 0.12, 0.16, 0.2 ], [0.02, 0.04, 0.07, 0.1, 0.2 ], [0.05, 0.1, 0.14, 0.16, 0.2 ]])
+sample_sizes = np.array([[6, 12, 18, 24, 28], [6, 12, 18, 24, 28]])
+rel_tol = 0.01
+CI=0.95
+col_names = ['Model id', 'Sig. bound 1', 'Sig. bound 2', 'Fut. bound 1', 'Fut. bound 2', 'Expected cost H0', 'Expected cost HA', 'Power at analysis 1', 'Power at analysis 2', 'Chance of true negative under H0 at analysis 1', 'Chance of true negative under H0 at analysis 2']
+model_ids = ['Pocock', 'OBF', 'Linear']
+default_n_repeats = 10
+max_n_repeats = 1000000
+costs = np.array([[ 6., 12., 18, 24]])
+test_parameters = {'sides': 'one', 'cohens_d': 1}
+memory_limit = 0.75
+"""
+
 # Global variables for this page only
 # Preceding underscore '_' makes sure it cannot be imported to other pages
 _min_analyses = 2
-_max_analyses = 7
+_max_analyses = 5
 _default_sample_step = 3
 _min_groups = 2
-_max_groups = 12
+_max_groups = 10
 
-# To add a new statistical test, add a label here and define a new object with the NewTest template below
+# To add a new statistical test, add a label here, define a new object with the NewTest template below, and add it into
+# the TestObject list
 
 # Dictionary of tests for the dropdown menu
 test_options = [{'label': 't-test', 'value': 'T'},
-                {'label': 'one-way ANOVA', 'value': 'One-way'}]
+                {'label': 'one-way ANOVA', 'value': 'One-way'},
+                {'label': 'Mann-Whitney-Wilcoxon', 'value': 'WMW'}]
 
 
 # region definition of test objects
@@ -35,8 +54,10 @@ def TestObject(testName):
     I chose this representation since it returns an object and is meant to be used as an object."""
     if testName == 'T':
         return TTest()
-    if testName == 'One-way':
+    elif testName == 'One-way':
         return OneWay()
+    elif testName == 'WMW':
+        return WMWTest()
 
 
 class BasicTest:
@@ -202,8 +223,8 @@ class NewTest(BasicTest):
         # 'name' values from the ids above. The datatables are stored as numpy arrays
         
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
-        # Simulate the test statistics, return a numpy array with shape (n_simulations, n_analyses)
+    def get_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
+        # Get the test statistics, return a numpy array with shape (n_simulations, n_analyses)
 
         if hypothesis == 'H0':
             return # put your null hypothesis test statistic simulating function here
@@ -220,9 +241,9 @@ class NewTest(BasicTest):
         return exact_sig, exact_fut, exact_true_neg = None, exact_power = None
         
     @staticmethod
-    def get_p_equivalent(x, N):
+    def get_p_equivalent(x, N, *args):
         # convert test statistic x into the corresponding p-value sample size(s) N (per group)
-        return t_test_functions.get_p_equivalent(x, N)
+        return t_test_functions.get_p_equivalent(x, N, *args)
         
 """
 
@@ -277,7 +298,7 @@ class TTest(BasicTest):
         if test_parameters['sd'] < 10 ** -9:
             return True, 'Standard deviation cannot be zero. Please fill in a different value.'
 
-        test_parameters['cohens_d'] = abs(means[:, 1] - means[:, 0])/test_parameters['sd']
+        test_parameters['cohens_d'] = (np.abs(means[:, 1] - means[:, 0]).astype(float)/test_parameters['sd'])[0]
 
         del test_parameters['means']
         del test_parameters['sd']
@@ -297,14 +318,11 @@ class TTest(BasicTest):
         return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
 
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
-        """ Simulate the test statistics """
-
-        if hypothesis == 'H0':
-            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, cohens_d=0,
-                                                        sides=test_parameters['sides'])
-        if hypothesis == 'HA':
-            return t_test_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, **test_parameters)
+    def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, default_n_repeats,
+                       max_n_repeats, costs, test_parameters, memory_limit):
+        """ Get the test statistics """
+        return t_test_functions.get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids,
+                                               default_n_repeats, max_n_repeats, costs, test_parameters, memory_limit)
 
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):
@@ -313,7 +331,7 @@ class TTest(BasicTest):
         return t_test_functions.give_exact(sample_sizes, alphas, betas, **test_parameters)
 
     @staticmethod
-    def get_p_equivalent(x, N):
+    def get_p_equivalent(x, N, *args):
         return t_test_functions.get_p_equivalent(x, N)
 
 
@@ -397,21 +415,100 @@ class OneWay(BasicTest):
         return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
 
     @staticmethod
-    def simulate_statistics(n_simulations, sample_sizes, hypothesis, memory_limit, test_parameters):
-        """ Simulate the test statistics """
-
-        if hypothesis == 'H0':
-            return one_way_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit,
-                                                         means=np.zeros(sample_sizes.shape[0]),
-                                                         sd=test_parameters['sd'])
-        else:
-            return one_way_functions.simulate_statistics(n_simulations, sample_sizes, memory_limit, **test_parameters)
+    def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, default_n_repeats,
+                       max_n_repeats, costs, test_parameters, memory_limit):
+        """ Get the test statistics """
+        return one_way_functions.get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids,
+                                                default_n_repeats, max_n_repeats, costs, test_parameters, memory_limit)
 
     @staticmethod
     def give_exact(sample_sizes, alphas, betas, test_parameters):
         return one_way_functions.give_exact(sample_sizes, alphas, betas, **test_parameters)
 
     @staticmethod
-    def get_p_equivalent(x, N):
+    def get_p_equivalent(x, N, *args):
         return one_way_functions.get_p_equivalent(x, N)
-# end region
+
+
+class WMWTest(BasicTest):
+    """ Test object for the Wilcoxon-Mann-Whitney test. """
+
+    def tab_basic_design(self):
+        """ The test specific input fields for the web page. """
+
+        return html.Div([
+            dbc.Row(dbc.Col(dbc.RadioItems(id={'type': 'test parameter', 'name': 'sides', 'form': 'value'},
+                                           options=[{'label': 'one-sided', 'value': 'one'},
+                                                    {'label': 'two-sided', 'value': 'two', 'disabled': True}],
+                                           value='one', inline=True),
+                            width={'offset': spacing['offset'], 'size': spacing['size']})),
+
+            self.TwoGroups,
+
+            html.Br(),
+            dbc.Row(dbc.Col([label('Pessimistic means and standard deviation')],
+                            width={'offset': spacing['offset'], 'size': spacing['size']})),
+            dbc.Row([
+                dbc.Col([
+                    html.Br(),
+                    dash_table.DataTable(id={'type': 'test parameter', 'name': 'means', 'form': 'datatable'},
+                                         columns=[{'id': 'mean-1', 'name': 'Mean group 1', 'type': 'numeric'},
+                                                  {'id': 'mean-2', 'name': 'Mean group 2', 'type': 'numeric'}],
+                                         data=[{'mean-1': 0, 'mean-2': 2}],
+                                         editable=True, **table_style)],
+                    width={'offset': spacing['offset'], 'size': 'auto'}),
+                dbc.Col([
+                    html.Br(),
+                    dbc.Input(id={'type': 'test parameter', 'name': 'sd', 'form': 'value'},
+                              placeholder='Standard deviation', type='number', min=0, step=0.000001)],
+                    width={'size': spacing['float_input']})])
+        ])
+
+    def check_input(self, test_param_values, test_param_values_ids, test_param_data, test_param_data_ids, **kwargs):
+        """ Put input in correct format and check if users wrote nonsense. """
+
+        test_parameters = self.test_params_to_dict(test_param_values, test_param_values_ids, test_param_data,
+                                                   test_param_data_ids)
+
+        means = np.asarray(test_parameters['means'])
+
+        if np.any(means == ''):
+            return True, 'Please fill in all cells for the means input table.'
+        if abs(means[:, 1] - means[:, 0]) < 10 ** -9:
+            return True, 'Please fill in different means for both groups.'
+        if 'sd' not in test_parameters.keys() or test_parameters['sd'] is None:
+            return True, 'Please fill in a value for the standard deviation.'
+        if test_parameters['sd'] < 10 ** -9:
+            return True, 'Standard deviation cannot be zero. Please fill in a different value.'
+
+        test_parameters['cohens_d'] = (np.abs(means[:, 1] - means[:, 0]).astype(float)/test_parameters['sd'])[0]
+
+        del test_parameters['means']
+        del test_parameters['sd']
+
+        return False, test_parameters
+
+    def fixed_sample_size(self, alpha, beta, test_param_values, test_param_values_ids, test_param_data,
+                          test_param_data_ids, **kwargs):
+        problem, test_parameters = self.check_input(test_param_values, test_param_values_ids, test_param_data,
+                                                    test_param_data_ids)
+        if problem:
+            return 'warning', test_parameters
+
+        n, typeII = wmw_functions.give_fixed_sample_size(test_parameters['cohens_d'], alpha, beta,
+                                                         test_parameters['sides'])
+
+        return 'secondary', 'The required sample size for a fixed sample design is {} per group.'.format(n)
+
+    @staticmethod
+    def get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids, default_n_repeats,
+                       max_n_repeats, costs, test_parameters, memory_limit):
+        """ Get the test statistics """
+        return wmw_functions.get_statistics(alphas, betas, sample_sizes, rel_tol, CI, col_names, model_ids,
+                                            costs, test_parameters)
+
+    @staticmethod
+    def get_p_equivalent(x, N, sig):
+        return wmw_functions.get_p_equivalent(x, N, sig)
+
+# endregion

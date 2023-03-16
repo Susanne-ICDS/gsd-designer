@@ -1,4 +1,4 @@
-import dash_html_components as html
+from dash import html
 import dash_bootstrap_components as dbc
 
 spacing_variables = {'offset': 1, 'size': 10, 'int_input': 1, 'float_input': 2}
